@@ -102,8 +102,8 @@ doEvent.Biomass_regenerationPM <- function(sim, eventTime, eventType) {
       if(!is.null(sim$rstCurrentBurn)) {
         sim <- FireDisturbance(sim)
       } else {
-        message(crayon::red("The Biomass_regenerationPM module is expecting sim$rstCurrentBurn; ",
-                            " Currently, it does not exist."))
+        message(crayon::red(paste0("The Biomass_regenerationPM module is expecting sim$rstCurrentBurn;\n",
+                                   "Currently, it does not exist, so no regeneration will happen")))
       }
       sim <- scheduleEvent(sim, time(sim) + P(sim)$fireTimestep,
                            "Biomass_regenerationPM", "fireDisturbance",
@@ -131,9 +131,9 @@ Init <- function(sim) {
 FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   # the presence of valid fire can cause three processes:
   # 1. partially remove species cohorts from the pixels that have been affected.
-  # 2. initiate the post-fire regeneration
+  # 2. initiate the post-fire regeneration (serotiny and/or resprouting)
   # 3. change of cohortdata and pixelgroup map
-  # may be a supplemenatary function is needed to convert non-logical map
+
   # to a logical map
   if (isTRUE(getOption("LandR.assertions"))) {
     if (!identical(NROW(sim$cohortData), NROW(unique(sim$cohortData, by = c("pixelGroup", "speciesCode", "age", "B"))))) {
@@ -171,9 +171,11 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   } else {
     burnedLoci
   }
+
   treedFirePixelTableSinceLastDisp <- data.table(pixelIndex = as.integer(treedBurnLoci),
                                                  pixelGroup = as.integer(getValues(sim$pixelGroupMap)[treedBurnLoci]),
                                                  burnTime = time(sim))
+
   sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(getValues(sim$pixelGroupMap))[pixelIndex]]
   # append previous year's
   treedFirePixelTableSinceLastDisp <- rbindlist(list(sim$treedFirePixelTableSinceLastDisp,
@@ -186,7 +188,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   setkey(burnedPixelCohortData, speciesCode)
 
   ## DO MORTALITY ----------------------------
-  ## TODO: MOVE SEVERITY ESTIMATES TO SEVERITY MODULE
+  ## TODO: MOVE SEVERITY ESTIMATES TO A SEVERITY MODULE (?)
   ## LANDIS-II Dynamic Fire System v3.0
   ## estimate fire severity from crown fraction burnt (CFB)
 
@@ -195,7 +197,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   ## from now on the survivor process is assessed per pixel (to ensure compatibility with serotiny/resprout tables)
   burnedPixelCohortData <- burnedPixelTable[burnedPixelCohortData, allow.cartesian = TRUE,
-                                                nomatch = 0, on = "pixelGroup"] ##
+                                            nomatch = 0, on = "pixelGroup"] ##
 
   ## TODO: is this still true?
   ## NOTE: rstCurrentburn and severity Data  don't match in pix number
@@ -225,9 +227,10 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   if (P(sim)$LANDISPM) {
     ## add fire tolerance and longevity
     burnedPixelCohortData <- burnedPixelCohortData[sim$species[, .(speciesCode, longevity, firetolerance)],
-                                                       on = "speciesCode", nomatch = 0]
+                                                   on = "speciesCode", nomatch = 0]
     ## calculate dif between severity and tolerance
-    # browser() ## is this subtraction okay?
+    ## TODO: is this subtraction okay?
+    # browser()
     burnedPixelCohortData[, severityToleranceDif := severity - firetolerance]
     ## join the % reduction
     burnedPixelCohortData <- burnedPixelCohortData[sim$fireDamageTable, on = "severityToleranceDif", nomatch = 0]
@@ -243,11 +246,12 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   } else {
     ## TODO MAYBE KEEP THE SAME SEVERITY NOTION, BUT THEN USE cfb TO DETERMINE AMOUNT OF BIOMASS
     ## REMOVED PER COHORT ON AN INVERSE AGE WEIGHTED AWAY
+    ## USE SPECIES TRAITS TO WEIGHT BIOMASS REMOVAL WITHIN EACH COHORT
   }
 
   ## CALCULATE SIDE SHADE -----------------------------
   ## TODO: calcSiteShade needs to be moved to LandR package
-  siteShade <- data.table(sim$LBMR$calcSiteShade(time = round(time(sim)), burnedPixelCohortData,
+  siteShade <- data.table(calcSiteShade(time = round(time(sim)), burnedPixelCohortData,
                                         sim$speciesEcoregion, sim$minRelativeB))
 
   burnedPixelCohortData <- siteShade[burnedPixelCohortData, on = "pixelGroup", nomatch = NA]
@@ -402,7 +406,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   if (!suppliedElsewhere(sim$fireDamageTable)) {
     sim$fireDamageTable <- data.table(agesKilled = c(0.2, 0.5, 0.85, 1.0), ## proportion of longevity below which there is cohort removal
-                                  severityToleranceDif = c(-2, -1, 0, 1))   ## difference between severity and spp fire tolerance
+                                      severityToleranceDif = c(-2, -1, 0, 1))   ## difference between severity and spp fire tolerance
   }
 
   return(invisible(sim))
