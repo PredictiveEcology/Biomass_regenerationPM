@@ -169,7 +169,6 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   ## make table where survivor, serotiny and resprouting cohorts will be stored
   postFirePixelCohortData <- sim$cohortData[0,]
-  # postFirePixelCohortData[, `:=`(pixelIndex = integer())]
   postFirePixelCohortData[, `:=`(pixelIndex = integer(),
                                  age = NULL, B = NULL, mortality = NULL,
                                  aNPPAct = NULL)]
