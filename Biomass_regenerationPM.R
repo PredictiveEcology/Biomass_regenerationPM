@@ -37,6 +37,12 @@ defineModule(sim, list(
     expectsInput("fireDamageTable", "data.table",
                  desc = "data.table defining upper age limit of cohorts killed by fire.
                  From LANDIS-II Dynamic Fire System v3.0 Manual"),
+    expectsInput("fireCFBRas", "RasterLayer",
+                 desc = "Raster of crown fraction burnt"),
+    expectsInput("fireROSRas", "RasterLayer",
+                 desc = "Raster of equilibrium rate of spread [m/min]"),
+    expectsInput("fireRSORas", "RasterLayer",
+                 desc = "Critical spread rate for crowning [m/min]"),
     expectsInput("inactivePixelIndex", "logical",
                  desc = "internal use. Keeps track of which pixels are inactive"),
     expectsInput("pixelGroupMap", "RasterLayer",
