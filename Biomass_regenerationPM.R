@@ -134,7 +134,33 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   # 2. initiate the post-fire regeneration (serotiny and/or resprouting)
   # 3. change of cohortdata and pixelgroup map
 
-  # to a logical map
+  ## checks
+  ## partial mortality needs the following objects
+  browser()
+  if (any(!suppliedElsewhere("fireRSORas", sim),
+          !suppliedElsewhere("fireROSRas", sim),
+          !suppliedElsewhere("fireCFBRas", sim))) {
+    message(crayon::red(paste0("Biomass_regenerationPM is missing one/several of the following rasters:\n",
+                               "  fireRSORas, fireROSRas and fireCFBRas.\n",
+                               "  DUMMY RASTERS will be used - if this is not intended, please \n",
+                               "  use a fire module that provides them (e.g. fireSpread)")))
+    vals <- getValues(sim$rstCurrentBurn)
+    valsRSO <- valsROS <- valsCFB <- integer(0)
+    valsRSO[!is.na(vals)] <- as.integer(round(runif(sum(!is.na(vals)), 0, 100)))
+    valsROS[!is.na(vals)] <- as.integer(round(runif(sum(!is.na(vals)), 0, 100)))
+    valsCFB[!is.na(vals)] <- runif(sum(!is.na(vals)), 0, 1)
+    fireRSORas <- setValues(sim$rstCurrentBurn, valsRSO)
+    fireROSRas <- setValues(sim$rstCurrentBurn, valsROS)
+    fireCFBRas <- setValues(sim$rstCurrentBurn, valsCFB)
+  } else {
+    ## create copies, so that when dummies need to be created
+    ## they are not detected in sim, but can be updated using
+    ## sim$rstCurrentBurn
+    fireRSORas <- sim$fireRSORas
+    fireROSRas <- sim$fireROSRas
+    fireCFBRas <- sim$fireCFBRas
+  }
+
   if (isTRUE(getOption("LandR.assertions"))) {
     if (!identical(NROW(sim$cohortData), NROW(unique(sim$cohortData, by = c("pixelGroup", "speciesCode", "age", "B"))))) {
       stop("sim$cohortData has duplicated rows, i.e., multiple rows with the same pixelGroup, speciesCode and age")
@@ -199,14 +225,11 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   burnedPixelCohortData <- burnedPixelTable[burnedPixelCohortData, allow.cartesian = TRUE,
                                             nomatch = 0, on = "pixelGroup"] ##
 
-  ## TODO: is this still true?
-  ## NOTE: rstCurrentburn and severity Data  don't match in pix number
-  ## this was because there were NAs in spreadProb/persistProb that were 1s un burnable map
   severityData <- data.table(pixelGroup = getValues(sim$pixelGroupMap),
                              pixelIndex = getValues(sim$rstCurrentBurn),
-                             RSO = getValues(sim$fireRSORas),
-                             ROS = getValues(sim$fireROSRas),
-                             CFB = getValues(sim$fireCFBRas))
+                             RSO = getValues(fireRSORas),
+                             ROS = getValues(fireROSRas),
+                             CFB = getValues(fireCFBRas))
   severityData <- na.omit(severityData)
 
   severityData[CFB < 0.1 & ROS < (RSO + 0.458)/2, severity := 1]
