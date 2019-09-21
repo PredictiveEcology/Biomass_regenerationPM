@@ -136,7 +136,6 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   ## checks
   ## partial mortality needs the following objects
-  browser()
   if (any(!suppliedElsewhere("fireRSORas", sim),
           !suppliedElsewhere("fireROSRas", sim),
           !suppliedElsewhere("fireCFBRas", sim))) {
@@ -153,8 +152,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     fireROSRas <- setValues(sim$rstCurrentBurn, valsROS)
     fireCFBRas <- setValues(sim$rstCurrentBurn, valsCFB)
   } else {
-    ## create copies, so that when dummies need to be created
-    ## they are not detected in sim, but can be updated using
+    ## create copies, so that when dummies need to be used
+    ## they are not detected in sim, but can still be updated using
     ## sim$rstCurrentBurn
     fireRSORas <- sim$fireRSORas
     fireROSRas <- sim$fireROSRas
