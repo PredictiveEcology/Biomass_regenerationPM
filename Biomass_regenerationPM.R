@@ -245,19 +245,43 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   burnedPixelCohortData[severity == 5, `:=` (B = 0, mortality = 0, aNPPAct = 0)]
 
   if (P(sim)$LANDISPM) {
+    ## FIRE DAMAGE ---------------------------
+    ## 1) Calculate site fire damage per cohort/species as severity - fire tolerance
+    ## 2) lookup the fire damage values on the fire damage table to decide cohort ages to kill
+    ## 3) for values that are not on the table, either the cohort/species is not affected or its totally killed
+
     ## add fire tolerance and longevity
     burnedPixelCohortData <- burnedPixelCohortData[sim$species[, .(speciesCode, longevity, firetolerance)],
                                                    on = "speciesCode", nomatch = 0]
     ## calculate dif between severity and tolerance
-    ## TODO: is this subtraction okay?
-    # browser()
     burnedPixelCohortData[, severityToleranceDif := severity - firetolerance]
-    ## join the % reduction
-    burnedPixelCohortData <- burnedPixelCohortData[sim$fireDamageTable, on = "severityToleranceDif", nomatch = 0]
+    assertFireToleranceDif(burnedPixelCohortData)
+
+    ## find the % reduction in biomass:
+    ## agesKilled w/ NAs come from observed severityToleranceDif having no matches in table,
+    ## so they are beyond the range of values
+    ## if the observed severityToleranceDif is higher than table values, then  the fire damage is maximum
+    ## if the observed severityToleranceDif is lower than table values, then there is no fire damage
+    burnedPixelCohortData <- sim$fireDamageTable[burnedPixelCohortData, on = "severityToleranceDif",
+                                                 nomatch = NA]
+
+    if (getOption("LandR.assertions", TRUE)){
+      if (!all(is.na(burnedPixelCohortData[(severityToleranceDif > max(sim$fireDamageTable$severityToleranceDif) &
+                                         severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif)),
+                                      agesKilled])))
+        stop("The join of fireDamageTable and burnedPixelCohortData went wrong. agesKilled should be NA
+             for site fire damage values outside the range of values in fireDamageTable")
+    }
+
+    burnedPixelCohortData[severityToleranceDif > max(sim$fireDamageTable$severityToleranceDif),
+                          agesKilled := 1.0]
+    burnedPixelCohortData[severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif),
+                          agesKilled := 0.0]
 
     ## and kill cohorts below longevity * prop. - still not partial cohort mortality
     ## but partial stand mortality  -- a lot are being killed because longevities are so large now (disparity from landis)
-    burnedPixelCohortData[age <= agesKilled * longevity, `:=` (B = 0, mortality = 0, aNPPAct = 0)]
+    burnedPixelCohortData[age/longevity <= agesKilled,
+                          `:=` (B = 0, mortality = 0, aNPPAct = 0)]
 
     ## remove unnecessary cols, but keep dead cohorts for serotiny/resprouting
     cols <- c("pixelGroup", "pixelIndex", "speciesCode",
