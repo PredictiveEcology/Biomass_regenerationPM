@@ -226,7 +226,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                             nomatch = 0, on = "pixelGroup"] ##
 
   severityData <- data.table(pixelGroup = getValues(sim$pixelGroupMap),
-                             pixelIndex = getValues(sim$rstCurrentBurn),
+                             burntPixels = getValues(sim$rstCurrentBurn),
                              RSO = getValues(fireRSORas),
                              ROS = getValues(fireROSRas),
                              CFB = getValues(fireCFBRas))
