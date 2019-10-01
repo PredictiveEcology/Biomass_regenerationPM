@@ -199,10 +199,13 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                                  pixelGroup = as.integer(getValues(sim$pixelGroupMap)[treedBurnLoci]),
                                                  burnTime = time(sim))
 
-  sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(getValues(sim$pixelGroupMap))[pixelIndex]]
-  # append previous year's
-  treedFirePixelTableSinceLastDisp <- rbindlist(list(sim$treedFirePixelTableSinceLastDisp,
-                                                     treedFirePixelTableSinceLastDisp))
+  ## TODO: Ceres: I don't think we should be bring in the previously burnt pixelGroups at this point
+  ##  solution (?) code was ciopy-paste to before the export to sim
+  # ## update past pixelGroup number to match current ones.
+  # sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(getValues(sim$pixelGroupMap))[pixelIndex]]
+  # # append previous year's
+  # treedFirePixelTableSinceLastDisp <- rbindlist(list(sim$treedFirePixelTableSinceLastDisp,
+  #                                                    treedFirePixelTableSinceLastDisp))
 
   ## make table spp/ecoregionGroup/age in burnt pixels
   burnedPixelCohortData <- sim$cohortData[pixelGroup %in% unique(treedFirePixelTableSinceLastDisp$pixelGroup)]
@@ -238,7 +241,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   ## rm unnecessary cols
   severityData <- severityData[, .(pixelGroup, severity)]
   ## add severity to survivor table
-  burnedPixelCohortData <- severityData[burnedPixelCohortData, on = "pixelGroup"]
+  burnedPixelCohortData <- severityData[burnedPixelCohortData, on = "pixelGroup",
+                                        allow.cartesian = TRUE]
 
   ## DO MORTALITY -----------------------------
   ## Highest severity kills all cohorts
@@ -383,6 +387,14 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   }
 
   sim$lastFireYear <- time(sim)
+
+  ## TODO: Ceres: moved this to here to avoid re-killing/serotiny/repsoruting pixelGroups that burned in the previous year.
+  ## update past pixelGroup number to match current ones.
+  sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(getValues(sim$pixelGroupMap))[pixelIndex]]
+  # append previous year's
+  treedFirePixelTableSinceLastDisp <- rbindlist(list(sim$treedFirePixelTableSinceLastDisp,
+                                                     treedFirePixelTableSinceLastDisp))
+
   sim$treedFirePixelTableSinceLastDisp <- treedFirePixelTableSinceLastDisp
   return(invisible(sim))
 }
