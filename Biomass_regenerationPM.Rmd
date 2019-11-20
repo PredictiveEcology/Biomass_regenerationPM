@@ -7,14 +7,14 @@ output: pdf_document
 
 # Overview
 
-This module belongs to the LandR-Biomass family of SpaDES modules and, in conjunction with LBMR (to be renamed to [LandR] Biomass_core), it simulates vegetation responses to (fire) disturbances: mortality, serotinous regeneration and regeneration by resprouting. 
+This module belongs to the LandR-Biomass family of SpaDES modules and, in conjunction with the LandR module 'Biomass_core', it simulates vegetation responses to (fire) disturbances: mortality, serotinous regeneration and regeneration by resprouting. 
 
 It's functioning is very similar to taht of [LandR] Biomass_regeneration, the difference being that Biomass_regenerationPM *does not* assume stand replacing fires. Instead, this module follows the partial mortality mechanisms in the LANDIS-II Dynamic Fire System Extension (v. 3.0) and kills cohorts depending on the fire severity and species' fire tolerances.
 Hence, unlike in the Biomass_regeneration module, new cohorts regerating via serotiny or resprouting will have to deal with shade conditions, should a fire only partially kill a stand.
 
 Because the module was programmed to respond to fire disturbances, it will only "do domething" if the user, or another module, provide a raster of burned pixels (`rstCurrentBurn`). Should this raster be missing, the module will not fail, but it also won't change any cohort. This is important because should another (fire) module provide a `rstCurrentBurn` the user must be aware that in non-fire years, this object must be "emptied".
 
-Also, the calculation of fire severity depends on 3 other rasters of fire behaviour properties: crown fraction burnt (`fireCFBRas`), fire equilibrium rate of spread (`fireROSRas`) and fire critical spread rate for crowning (`fireRSORas`). *Dummy* versions of theres rasters will be generated based on a supplied `rstCurrentBurn`, however the user can choose to pair this module with Biomass_fireProperties and Biomass_fuels (the later needing LBMR to run), for  fuel calculations and fire behaviour based on simulated vegetation and climate data.
+Also, the calculation of fire severity depends on 3 other rasters of fire behaviour properties: crown fraction burnt (`fireCFBRas`), fire equilibrium rate of spread (`fireROSRas`) and fire critical spread rate for crowning (`fireRSORas`). *Dummy* versions of theres rasters will be generated based on a supplied `rstCurrentBurn`, however the user can choose to pair this module with Biomass_fireProperties and Biomass_fuels (the later needing Biomass_core to run), for  fuel calculations and fire behaviour based on simulated vegetation and climate data.
 
 # Functioning
 Should a `rstCurrentBurn` exist the module will:
