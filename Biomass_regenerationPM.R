@@ -301,7 +301,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   ## CALCULATE SIDE SHADE -----------------------------
   ## TODO: calcSiteShade needs to be moved to LandR package
-  siteShade <- data.table(calcSiteShade(time = round(time(sim)), burnedPixelCohortData,
+  siteShade <- data.table(calcSiteShade(currentTime = round(time(sim)), burnedPixelCohortData,
                                         sim$speciesEcoregion, sim$minRelativeB))
 
   burnedPixelCohortData <- siteShade[burnedPixelCohortData, on = "pixelGroup", nomatch = NA]
@@ -374,7 +374,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       outs <- updateCohortData(newPixelCohortData = postFirePixelCohortData,
                                cohortData = survivorPixelCohortData,
                                pixelGroupMap = sim$pixelGroupMap,
-                               time = round(time(sim)),
+                               currentTime = round(time(sim)),
                                speciesEcoregion = sim$speciesEcoregion,
                                treedFirePixelTableSinceLastDisp = treedFirePixelTableSinceLastDisp,
                                successionTimestep = P(sim)$successionTimestep)
