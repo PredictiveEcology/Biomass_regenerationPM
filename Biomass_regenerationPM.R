@@ -225,7 +225,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   ## from now on the survivor process is assessed per pixel (to ensure compatibility with serotiny/resprout tables)
   burnedPixelCohortData <- burnedPixelTable[burnedPixelCohortData, allow.cartesian = TRUE,
-                                            nomatch = 0, on = "pixelGroup"] ##
+                                            nomatch = 0, on = "pixelGroup"]
 
   severityData <- data.table(pixelGroup = getValues(sim$pixelGroupMap),
                              burntPixels = getValues(sim$rstCurrentBurn),
@@ -242,8 +242,14 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   ## rm unnecessary cols
   severityData <- severityData[, .(pixelGroup, severity)]
-  ## add severity to survivor table
+
+  ## add severity to survivor table.
+  ## TODO: if the rstCurrentBurn doesn't match the fire maps
+  ## there will be a mismatch between burnt pixels and pixels with fire properties.
+  browser()
+
   burnedPixelCohortData <- severityData[burnedPixelCohortData, on = "pixelGroup",
+                                        # nomatch = 0,
                                         allow.cartesian = TRUE]
 
   ## DO MORTALITY -----------------------------
@@ -279,6 +285,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
              for site fire damage values outside the range of values in fireDamageTable")
     }
 
+    ## add extreme values
     burnedPixelCohortData[severityToleranceDif > max(sim$fireDamageTable$severityToleranceDif),
                           agesKilled := 1.0]
     burnedPixelCohortData[severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif),
