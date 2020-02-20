@@ -227,7 +227,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   burnedPixelCohortData <- burnedPixelTable[burnedPixelCohortData, allow.cartesian = TRUE,
                                             nomatch = 0, on = "pixelGroup"]
 
-  severityData <- data.table(pixelGroup = getValues(sim$pixelGroupMap),
+  severityData <- data.table(pixelIndex = 1:ncell(sim$pixelGroupMap),
+                             pixelGroup = getValues(sim$pixelGroupMap),
                              burntPixels = getValues(sim$rstCurrentBurn),
                              RSO = getValues(fireRSORas),
                              ROS = getValues(fireROSRas),
@@ -241,7 +242,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   severityData[CFB >= 0.9, severity := 5]
 
   ## rm unnecessary cols
-  severityData <- severityData[, .(pixelGroup, severity)]
+  severityData <- severityData[, .(pixelIndex, pixelGroup, severity)]
 
   ## add severity to survivor table.
   ## TODO: if the rstCurrentBurn doesn't match the fire maps
