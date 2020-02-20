@@ -245,12 +245,13 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   severityData <- severityData[, .(pixelIndex, pixelGroup, severity)]
 
   ## add severity to survivor table.
-  ## TODO: if the rstCurrentBurn doesn't match the fire maps
-  ## there will be a mismatch between burnt pixels and pixels with fire properties.
-  browser()
-
-  burnedPixelCohortData <- severityData[burnedPixelCohortData, on = "pixelGroup",
-                                        # nomatch = 0,
+  if (getOption("LandR.assertions"))
+    if (!all(burnedPixelCohortData$pixelGroup %in% severityData$pixelGroup)) {
+      warning("Some burnt pixels no fire behaviour indices or severity.\n",
+              "Please debug Biomass_regenerationPM::fireDisturbance")
+    }
+  burnedPixelCohortData <- severityData[burnedPixelCohortData,
+                                        on = .(pixelGroup, pixelIndex),
                                         allow.cartesian = TRUE]
 
   ## DO MORTALITY -----------------------------
