@@ -373,15 +373,23 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       if (verbose > 0)
         message(blue("Post serotiny and resprouting"))
 
-      ## make a survivor pixel cohort data by removing dead cohorts
-      survivorPixelCohortData <- addPixels2CohortData(copy(sim$cohortData), sim$pixelGroupMap)
-      cols <- c("speciesCode", "age", "pixelIndex")
-      survivorPixelCohortData <- survivorPixelCohortData[!burnedPixelCohortData[B == 0, ..cols], on = cols]
-      set(survivorPixelCohortData, NULL, "pixelIndex", NULL)
-      survivorPixelCohortData <- survivorPixelCohortData[!duplicated(survivorPixelCohortData)]
+      ## add the survivors cohorts to the serotiny/reprouting ones
+      cols <- c("pixelGroup", "pixelIndex", "speciesCode", "ecoregionGroup", "age", "B")
+      postFirePixelCohortData <- rbind(postFirePixelCohortData, burnedPixelCohortData[B > 0, ..cols],
+                                       use.names = TRUE, fill = TRUE)
+      postFirePixelCohortData[is.na(type), type := "survivor"]
+
+      ## set ages to 1 here, because updateCohortData will only so so if there isn't an age column
+      postFirePixelCohortData[is.na(age), age := 1L]
+
+      ## filter cohortData to only have unburnt pixels
+      unburnedCohortData <- addPixels2CohortData(copy(sim$cohortData), sim$pixelGroupMap)
+      unburnedCohortData <- unburnedCohortData[!pixelIndex %in% treedFirePixelTableSinceLastDisp$pixelIndex]
+      set(unburnedCohortData, NULL, "pixelIndex", NULL)  ## collapse pixel groups again
+      unburnedCohortData <- unburnedCohortData[!duplicated(unburnedCohortData)]
 
       outs <- updateCohortData(newPixelCohortData = postFirePixelCohortData,
-                               cohortData = survivorPixelCohortData,
+                               cohortData = unburnedCohortData,
                                pixelGroupMap = sim$pixelGroupMap,
                                currentTime = round(time(sim)),
                                speciesEcoregion = sim$speciesEcoregion,
