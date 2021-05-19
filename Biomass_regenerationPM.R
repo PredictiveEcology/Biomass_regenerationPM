@@ -170,9 +170,6 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   # In some cases sumB exists, but not always -- we want to remove it too here.
   if (isTRUE("sumB" %in% colnames(postFirePixelCohortData))) {
     set(postFirePixelCohortData, NULL, "sumB", NULL)
-    postFirePixelCohortData[, `:=`(pixelIndex = as.integer(),
-                                   age = NULL, B = NULL, mortality = NULL,
-                                   aNPPAct = NULL)]
   }
 
   if (P(sim)$calibrate & is.null(sim$postFireRegenSummary)) {   # don't overwrite
@@ -303,7 +300,6 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   }
 
   ## CALCULATE SIDE SHADE -----------------------------
-  ## TODO: calcSiteShade needs to be moved to LandR package
   siteShade <- data.table(calcSiteShade(currentTime = round(time(sim)), burnedPixelCohortData,
                                         sim$speciesEcoregion, sim$minRelativeB))
 
