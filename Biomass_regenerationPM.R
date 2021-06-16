@@ -30,7 +30,7 @@ defineModule(sim, list(
                     desc = "Use LANDIS-II version of partial fire-driven mortality? See LANDIS-II Dynamic Fire System v3.0"),
     defineParameter("successionTimestep", "numeric", 10L, NA, NA, "defines the simulation time step, default is 10 years")
   ),
-  inputObjects = bind_rows(
+  inputObjects = bindrows(
     expectsInput("cohortData", "data.table",
                  desc = "age cohort-biomass table hooked to pixel group map by pixelGroupIndex at
                  succession time step"),
@@ -61,7 +61,7 @@ defineModule(sim, list(
     expectsInput("treedFirePixelTableSinceLastDisp", "data.table",
                  desc = "3 columns: pixelIndex, pixelGroup, and burnTime. Each row represents a forested pixel that was burned up to and including this year, since last dispersal event, with its corresponding pixelGroup and time it occurred")
   ),
-  outputObjects = bind_rows(
+  outputObjects = bindrows(
     createsOutput("cohortData", "data.table",
                   desc = paste("age cohort-biomass table hooked to pixel group map",
                                "by pixelGroupIndex at succession time step")),
