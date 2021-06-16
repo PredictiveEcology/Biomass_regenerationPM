@@ -18,7 +18,7 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = list("README.txt", "Biomass_regenerationPM.Rmd"),
   reqdPkgs = list("crayon", "data.table", "raster", ## TODO: update package list!
-                  "PredictiveEcology/LandR@development",
+                  "PredictiveEcology/LandR@development (>= 1.0.3)",
                   "PredictiveEcology/pemisc@development"),
   parameters = rbind(
     defineParameter("calibrate", "logical", FALSE, desc = "Do calibration? Defaults to FALSE"),
@@ -69,10 +69,15 @@ defineModule(sim, list(
                   desc = "Year of the most recent fire year"),
     createsOutput("pixelGroupMap", "RasterLayer",
                   desc = "updated community map at each succession time step"),
-    createsOutput("serotinyResproutSuccessPixels", "numeric",
-                  desc = "Pixels that were successfully regenerated via serotiny or resprouting. This is a subset of treedBurnLoci"),
     createsOutput("postFireRegenSummary", "data.table",
                   desc = "summary table of species post-fire regeneration"),
+    createsOutput("serotinyResproutSuccessPixels", "numeric",
+                  desc = "Pixels that were successfully regenerated via serotiny or resprouting. This is a subset of treedBurnLoci"),
+    createsOutput("severityBMap", "RasterLayer",
+                  desc = "A map of fire severity, as in the amount of post-fire mortality (biomass loss)"),
+    createsOutput("severityData", "data.table",
+                  desc = "A data.table of pixel fire severity, as in the amount of post-fire mortality (biomass loss).
+                  May also have severity class used to calculate mortality."),
     createsOutput("treedFirePixelTableSinceLastDisp", "data.table",
                   desc = "3 columns: pixelIndex, pixelGroup, and burnTime. Each row represents a forested pixel that was burned up to and including this year, since last dispersal event, with its corresponding pixelGroup and time it occurred")
   )
@@ -94,7 +99,7 @@ doEvent.Biomass_regenerationPM <- function(sim, eventTime, eventType) {
                            eventPriority = 3)
     },
     fireDisturbance = {
-      if(!is.null(sim$rstCurrentBurn)) {
+      if (!is.null(sim$rstCurrentBurn)) {
         sim <- FireDisturbance(sim)
       } else {
         message(crayon::red(paste0("The Biomass_regenerationPM module is expecting sim$rstCurrentBurn;\n",
@@ -270,7 +275,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     burnedPixelCohortData <- sim$fireDamageTable[burnedPixelCohortData, on = "severityToleranceDif",
                                                  nomatch = NA]
 
-    if (getOption("LandR.assertions", TRUE)){
+    if (getOption("LandR.assertions", TRUE)) {
       if (!all(is.na(burnedPixelCohortData[(severityToleranceDif > max(sim$fireDamageTable$severityToleranceDif) &
                                          severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif)),
                                       agesKilled])))
@@ -287,12 +292,26 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     ## and kill cohorts below longevity * prop. - still not partial cohort mortality
     ## but partial stand mortality  -- a lot are being killed because longevities are so large now (disparity from landis)
     burnedPixelCohortData[age/longevity <= agesKilled,
-                          `:=` (B = 0, mortality = 0, aNPPAct = 0)]
+                          `:=`(B = 0, mortality = 0, aNPPAct = 0)]
 
     ## remove unnecessary cols, but keep dead cohorts for serotiny/resprouting
     cols <- c("pixelGroup", "pixelIndex", "speciesCode",
               "ecoregionGroup", "age", "B", "mortality", "aNPPAct")
     burnedPixelCohortData <- burnedPixelCohortData[, ..cols]
+
+    ## calculate amount of biomass lost per pixel and make severityMap
+    ## add biomass-based severity to severityData
+    severityData2 <- calcSeverityB(sim$cohortData, burnedPixelCohortData)
+    cols <- c("pixelGroup", "pixelIndex")
+    severityData <- severityData[severityData2, on = cols]
+
+    ## make severity map
+    severityBMap <- setValues(sim$rasterToMatch, rep(NA, ncell(sim$rasterToMatch)))
+    severityBMap[severityData$pixelIndex] <- severityData$severityB
+
+    ## export DT and map
+    sim$severityBMap <- severityBMap
+    sim$severityData <- severityData
   } else {
     ## TODO MAYBE KEEP THE SAME SEVERITY NOTION, BUT THEN USE cfb TO DETERMINE AMOUNT OF BIOMASS
     ## REMOVED PER COHORT ON AN INVERSE AGE WEIGHTED AWAY
