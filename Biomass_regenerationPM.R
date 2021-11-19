@@ -214,7 +214,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   ## DO MORTALITY ----------------------------
   ## TODO: MOVE SEVERITY ESTIMATES TO A SEVERITY MODULE (?)
   ## LANDIS-II Dynamic Fire System v3.0
-  ## estimate fire severity from crown fraction burnt (CFB)
+  ## estimate fire severity from crown fraction burnt (CFB),
+  ## equilibrium head fire rate of spread (ROS) and critical spread rate for crowning (RSO)
 
   ## select the pixels that have potential survivors and assess them
   burnedPixelTable <- treedFirePixelTableSinceLastDisp[pixelGroup %in% unique(burnedPixelCohortData$pixelGroup)]
