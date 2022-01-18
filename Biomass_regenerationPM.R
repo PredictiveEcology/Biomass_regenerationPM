@@ -35,8 +35,8 @@ defineModule(sim, list(
                  desc = "age cohort-biomass table hooked to pixel group map by pixelGroupIndex at
                  succession time step"),
     expectsInput("fireDamageTable", "data.table",
-                 desc = "data.table defining upper age limit of cohorts killed by fire.
-                 From LANDIS-II Dynamic Fire System v3.0 Manual"),
+                 desc = paste("data.table defining upper age limit of cohorts killed by fire depending on the",
+                 "species' fire tolerance values - 'species$firetolerance'. From LANDIS-II Dynamic Fire System v3.0 Manual")),
     expectsInput("fireCFBRas", "RasterLayer",
                  desc = "Raster of crown fraction burnt"),
     expectsInput("fireROSRas", "RasterLayer",
@@ -270,7 +270,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     ## find the % reduction in biomass:
     ## agesKilled w/ NAs come from observed severityToleranceDif having no matches in table,
     ## so they are beyond the range of values
-    ## if the observed severityToleranceDif is higher than table values, then  the fire damage is maximum
+    ## if the observed severityToleranceDif is higher than table values, then the fire damage is maximum
     ## if the observed severityToleranceDif is lower than table values, then there is no fire damage
     burnedPixelCohortData <- sim$fireDamageTable[burnedPixelCohortData, on = "severityToleranceDif",
                                                  nomatch = NA]
