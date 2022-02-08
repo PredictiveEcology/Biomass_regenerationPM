@@ -18,7 +18,7 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = list("README.txt", "Biomass_regenerationPM.Rmd"),
   reqdPkgs = list("crayon", "data.table", "raster", ## TODO: update package list!
-                  "PredictiveEcology/LandR@development (>= 1.0.3)",
+                  "PredictiveEcology/LandR@development (>= 1.0.7.9003)",
                   "PredictiveEcology/pemisc@development"),
   parameters = rbind(
     defineParameter("calibrate", "logical", FALSE, desc = "Do calibration? Defaults to FALSE"),
@@ -26,6 +26,7 @@ defineModule(sim, list(
                     desc = "The event time that the first fire disturbance event occurs"),
     defineParameter("fireTimestep", "numeric", NA,
                     desc = "The number of time units between successive fire events in a fire module"),
+    defineParameter("initialB", "numeric", 10, 1, NA, desc = "initial biomass values of new age-1 cohorts"),
     defineParameter("LANDISPM", "logical", TRUE,
                     desc = "Use LANDIS-II version of partial fire-driven mortality? See LANDIS-II Dynamic Fire System v3.0"),
     defineParameter("successionTimestep", "numeric", 10L, NA, NA, "defines the simulation time step, default is 10 years")
@@ -404,6 +405,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                currentTime = round(time(sim)),
                                speciesEcoregion = sim$speciesEcoregion,
                                treedFirePixelTableSinceLastDisp = treedFirePixelTableSinceLastDisp,
+                               initialB = P(sim)$initialB,
                                successionTimestep = P(sim)$successionTimestep)
 
       sim$cohortData <- outs$cohortData
