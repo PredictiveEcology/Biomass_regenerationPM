@@ -32,7 +32,20 @@ defineModule(sim, list(
                                  "(see Scheller and Miranda, 2015 or `?LandR::.initiateNewCohorts`)")),
     defineParameter("LANDISPM", "logical", TRUE,
                     desc = "Use LANDIS-II version of partial fire-driven mortality? See LANDIS-II Dynamic Fire System v3.0"),
-    defineParameter("successionTimestep", "numeric", 10L, NA, NA, "defines the simulation time step, default is 10 years")
+    defineParameter("successionTimestep", "numeric", 10L, NA, NA, "defines the simulation time step, default is 10 years"),
+    defineParameter(".plots", "character", "screen", NA, NA,
+                    "Used by Plots function, which can be optionally used here"),
+    defineParameter(".plotInitialTime", "numeric", start(sim), NA, NA,
+                    "This describes the simulation time at which the first plot event should occur"),
+    defineParameter(".plotInterval", "numeric", NA, NA, NA,
+                    "This describes the simulation time interval between plot events"),
+    defineParameter(".saveInitialTime", "numeric", NA, NA, NA,
+                    "This describes the simulation time at which the first save event should occur"),
+    defineParameter(".saveInterval", "numeric", NA, NA, NA,
+                    "This describes the simulation time interval between save events"),
+    defineParameter(".useCache", "character", c(".inputObjects", "init"), NA, NA,
+                    desc = paste("Should this entire module be run with caching activated?",
+                                 "This is generally intended for data-type modules, where stochasticity and time are not relevant"))
   ),
   inputObjects = bindrows(
     expectsInput("cohortData", "data.table",
