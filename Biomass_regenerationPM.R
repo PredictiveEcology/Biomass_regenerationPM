@@ -26,18 +26,34 @@ defineModule(sim, list(
                     desc = "The event time that the first fire disturbance event occurs"),
     defineParameter("fireTimestep", "numeric", NA,
                     desc = "The number of time units between successive fire events in a fire module"),
-    defineParameter("initialB", "numeric", 10, 1, NA, desc = "initial biomass values of new age-1 cohorts"),
+    defineParameter("initialB", "numeric", 10, 1, NA,
+                    desc = paste("initial biomass values of new age-1 cohorts.",
+                                 "If `NA` or `NULL`, initial biomass will be calculated as in LANDIS-II Biomass Suc. Extension",
+                                 "(see Scheller and Miranda, 2015 or `?LandR::.initiateNewCohorts`)")),
     defineParameter("LANDISPM", "logical", TRUE,
                     desc = "Use LANDIS-II version of partial fire-driven mortality? See LANDIS-II Dynamic Fire System v3.0"),
-    defineParameter("successionTimestep", "numeric", 10L, NA, NA, "defines the simulation time step, default is 10 years")
+    defineParameter("successionTimestep", "numeric", 10L, NA, NA, "defines the simulation time step, default is 10 years"),
+    defineParameter(".plots", "character", "screen", NA, NA,
+                    "Used by Plots function, which can be optionally used here"),
+    defineParameter(".plotInitialTime", "numeric", start(sim), NA, NA,
+                    "This describes the simulation time at which the first plot event should occur"),
+    defineParameter(".plotInterval", "numeric", NA, NA, NA,
+                    "This describes the simulation time interval between plot events"),
+    defineParameter(".saveInitialTime", "numeric", NA, NA, NA,
+                    "This describes the simulation time at which the first save event should occur"),
+    defineParameter(".saveInterval", "numeric", NA, NA, NA,
+                    "This describes the simulation time interval between save events"),
+    defineParameter(".useCache", "character", c(".inputObjects", "init"), NA, NA,
+                    desc = paste("Should this entire module be run with caching activated?",
+                                 "This is generally intended for data-type modules, where stochasticity and time are not relevant"))
   ),
   inputObjects = bindrows(
     expectsInput("cohortData", "data.table",
                  desc = "age cohort-biomass table hooked to pixel group map by pixelGroupIndex at
                  succession time step"),
     expectsInput("fireDamageTable", "data.table",
-                 desc = "data.table defining upper age limit of cohorts killed by fire.
-                 From LANDIS-II Dynamic Fire System v3.0 Manual"),
+                 desc = paste("data.table defining upper age limit of cohorts killed by fire depending on the",
+                 "species' fire tolerance values - 'species$firetolerance'. From LANDIS-II Dynamic Fire System v3.0 Manual")),
     expectsInput("fireCFBRas", "RasterLayer",
                  desc = "Raster of crown fraction burnt"),
     expectsInput("fireROSRas", "RasterLayer",
@@ -125,6 +141,9 @@ Init <- function(sim) {
   if (is.na(P(sim)$fireTimestep))
     stop(paste("Please provide a value for `P(sim)$fireTimestep`.",
                "It should match the fire time step (fire frequency)."))
+
+  paramCheckOtherMods(sim, "initialB", ifSetButDifferent = "warning")
+
   return(invisible(sim))
 }
 
@@ -272,7 +291,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     ## find the % reduction in biomass:
     ## agesKilled w/ NAs come from observed severityToleranceDif having no matches in table,
     ## so they are beyond the range of values
-    ## if the observed severityToleranceDif is higher than table values, then  the fire damage is maximum
+    ## if the observed severityToleranceDif is higher than table values, then the fire damage is maximum
     ## if the observed severityToleranceDif is lower than table values, then there is no fire damage
     burnedPixelCohortData <- sim$fireDamageTable[burnedPixelCohortData, on = "severityToleranceDif",
                                                  nomatch = NA]
