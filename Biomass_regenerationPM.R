@@ -368,8 +368,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   postFirePixelCohortData <- serotinyOutputs$postFirePixelCohortData
   serotinyPixel <- serotinyOutputs$serotinyPixel
 
-  if (!is.null(serotinyOutputs$postFireRegserotinyOuputs))
-    sim$postFireRegserotinyOuputs <- serotinyOutputs$postFireRegserotinyOuputs
+  if (!is.null(serotinyOutputs$postFireRegenSummary))
+    sim$postFireRegenSummary <- serotinyOutputs$postFireRegenSummary
 
   rm(serotinyOutputs)
 
@@ -387,8 +387,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   postFirePixelCohortData <- resproutingOutputs$postFirePixelCohortData
   sim$serotinyResproutSuccessPixels <- resproutingOutputs$serotinyResproutSuccessPixels
-  if (!is.null(resproutingOutputs$postFireRegserotinyOuputs))
-    sim$postFireRegserotinyOuputs <- resproutingOutputs$postFireRegserotinyOuputs
+  if (!is.null(resproutingOutputs$postFireRegenSummary))
+    sim$postFireRegenSummary <- resproutingOutputs$postFireRegenSummary
 
   rm(resproutingOutputs)
 
