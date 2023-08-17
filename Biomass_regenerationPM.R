@@ -162,7 +162,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     message(crayon::red(paste0("Biomass_regenerationPM is missing one/several of the following rasters:\n",
                                "  fireRSORas, fireROSRas and fireCFBRas.\n",
                                "  DUMMY RASTERS will be used - if this is not intended, please \n",
-                               "  use a fire module that provides them (e.g. fireSpread)")))
+                               "  use a fire module that provides them (e.g. FavierFireSpread)")))
     vals <- getValues(sim$rstCurrentBurn)
     valsRSO <- valsROS <- valsCFB <- integer(0)
     valsRSO[!is.na(vals)] <- as.integer(round(runif(sum(!is.na(vals)), 0, 100)))
