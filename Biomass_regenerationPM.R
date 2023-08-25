@@ -18,7 +18,7 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = list("README.txt", "Biomass_regenerationPM.Rmd"),
   reqdPkgs = list("crayon", "data.table", "raster", ## TODO: update package list!
-                  "PredictiveEcology/LandR@development (>= 1.0.7.9003)",
+                  "PredictiveEcology/LandR@LIM (>= 1.0.7.90025)",
                   "PredictiveEcology/pemisc@development"),
   parameters = rbind(
     defineParameter("calibrate", "logical", FALSE, desc = "Do calibration? Defaults to FALSE"),
@@ -342,9 +342,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   ## CALCULATE SIDE SHADE -----------------------------
   siteShade <- data.table(calcSiteShade(currentTime = round(time(sim)), burnedPixelCohortData,
                                         sim$speciesEcoregion, sim$minRelativeB))
-
   burnedPixelCohortData <- siteShade[burnedPixelCohortData, on = "pixelGroup", nomatch = NA]
-  burnedPixelCohortData <- burnedPixelCohortData[is.na(siteShade), siteShade := 0]
+  burnedPixelCohortData[is.na(siteShade), siteShade := 0]
   rm(siteShade)
 
   ## clean burnedPixelCohortData from unnecessary columns
@@ -412,20 +411,56 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       ## set ages to 1 here, because updateCohortData will only so so if there isn't an age column
       postFirePixelCohortData[is.na(age), age := 1L]
 
-      ## filter cohortData to only have unburnt pixels
-      unburnedCohortData <- addPixels2CohortData(copy(sim$cohortData), sim$pixelGroupMap)
-      unburnedCohortData <- unburnedCohortData[!pixelIndex %in% treedFirePixelTableSinceLastDisp$pixelIndex]
-      set(unburnedCohortData, NULL, "pixelIndex", NULL)  ## collapse pixel groups again
-      unburnedCohortData <- unburnedCohortData[!duplicated(unburnedCohortData)]
+      ## filter cohortData to only have unburnt pixels -- this is not sufficient!!!
+      ## in PGs where cohorts die in one but not other pixels, these cohorts from other pixels are added back where they were supposed to be removed.
+      # unburnedPCohortData <- addPixels2CohortData(copy(sim$cohortData), sim$pixelGroupMap)
+      # unburnedPCohortData <- unburnedPCohortData[!pixelIndex %in% treedFirePixelTableSinceLastDisp$pixelIndex]
+      # set(unburnedPCohortData, NULL, "pixelIndex", NULL)  ## collapse pixel groups again
+      # unburnedPCohortData <- unburnedPCohortData[!duplicated(unburnedPCohortData)]
+
+      ## redo PGs in all burnt pixels --
+      ## 1) we need to create a table of unburt pixels, and burnt pixels with dead and surviving cohorts of burnt pixels,
+      ## but not new cohorts (serotiny/resprout) -- these are added by updateCohortData
+      ## 2) then remove dead cohorts for updateCohortData
+      unburnedPCohortData <- addPixels2CohortData(copy(sim$cohortData), sim$pixelGroupMap)
+      unburnedPCohortData <- unburnedPCohortData[!pixelIndex %in% treedFirePixelTableSinceLastDisp$pixelIndex]
+      newPCohortData <- rbind(unburnedPCohortData, burnedPixelCohortData, fill = TRUE)
+
+      columnsForPG <- c("ecoregionGroup", "speciesCode", "age", "B")
+      cd <- newPCohortData[, c("pixelIndex", columnsForPG), with = FALSE]
+      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPG)]
+
+      pixelGroupMap <- sim$pixelGroupMap
+      pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
+
+      if (getOption("LandR.assertions", TRUE)) {
+        test <- setdiff(which(!is.na(pixelGroupMap[])), newPCohortData$pixelIndex)
+        if (any(pixelGroupMap[test] != 0)) {
+          stop("Bug in Biomass_regenerationPM: pixels w/o information in burnt and unburnt pixelCohortData tables")
+        }
+      }
+
+      ## collapse to PGs
+      tempCohortData <- copy(newPCohortData)
+      set(tempCohortData, NULL, "pixelIndex", NULL)
+      tempCohortData <- tempCohortData[!duplicated(tempCohortData)]
+
+      ## now remove dead cohorts, and keep only original columns
+      tempCohortData <- tempCohortData[B > 0, .SD, .SDcols = names(sim$cohortData)]
 
       outs <- updateCohortData(newPixelCohortData = postFirePixelCohortData,
-                               cohortData = unburnedCohortData,
-                               pixelGroupMap = sim$pixelGroupMap,
+                               cohortData = tempCohortData,
+                               pixelGroupMap = pixelGroupMap,
                                currentTime = round(time(sim)),
                                speciesEcoregion = sim$speciesEcoregion,
                                treedFirePixelTableSinceLastDisp = treedFirePixelTableSinceLastDisp,
                                initialB = P(sim)$initialB,
                                successionTimestep = P(sim)$successionTimestep)
+
+      assertPostFireDist(cohortDataOrig = tempCohortData, pixelGroupMapOrig = pixelGroupMap,
+                         cohortDataNew = outs$cohortData, pixelGroupMapNew = outs$pixelGroupMap,
+                         postFirePixelCohortData = postFirePixelCohortData,
+                         burnedPixelCohortData, doAssertion = getOption("LandR.assertions", TRUE))
 
       sim$cohortData <- outs$cohortData
       sim$pixelGroupMap <- outs$pixelGroupMap
