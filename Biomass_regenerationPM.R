@@ -323,9 +323,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   ## CALCULATE SIDE SHADE -----------------------------
   siteShade <- data.table(calcSiteShade(currentTime = round(time(sim)), burnedPixelCohortData,
                                         sim$speciesEcoregion, sim$minRelativeB))
-
   burnedPixelCohortData <- siteShade[burnedPixelCohortData, on = "pixelGroup", nomatch = NA]
-  burnedPixelCohortData <- burnedPixelCohortData[is.na(siteShade), siteShade := 0]
+  burnedPixelCohortData[is.na(siteShade), siteShade := 0]
   rm(siteShade)
 
   ## clean burnedPixelCohortData from unnecessary columns
