@@ -438,6 +438,11 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                initialB = P(sim)$initialB,
                                successionTimestep = P(sim)$successionTimestep)
 
+      assertPostFireDist(cohortDataOrig = tempCohortData, pixelGroupMapOrig = pixelGroupMap,
+                         cohortDataNew = outs$cohortData, pixelGroupMapNew = outs$pixelGroupMap,
+                         postFirePixelCohortData = postFirePixelCohortData,
+                         burnedPixelCohortData, doAssertion = getOption("LandR.assertions", TRUE))
+
       sim$cohortData <- outs$cohortData
       sim$pixelGroupMap <- outs$pixelGroupMap
       sim$pixelGroupMap[] <- as.integer(sim$pixelGroupMap[])
