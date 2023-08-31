@@ -396,10 +396,14 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       # set(unburnedPCohortData, NULL, "pixelIndex", NULL)  ## collapse pixel groups again
       # unburnedPCohortData <- unburnedPCohortData[!duplicated(unburnedPCohortData)]
 
-      ## redo PGs in all burnt pixels --
-      ## 1) we need to create a table of unburt pixels, and burnt pixels with dead and surviving cohorts of burnt pixels,
+      ## redo PGs in all burnt pixels
+      ## 1) we need to create a table of unburt pixels and burnt pixels with dead and surviving cohorts,
       ## but not new cohorts (serotiny/resprout) -- these are added by updateCohortData
-      ## 2) then remove dead cohorts for updateCohortData
+      ## 2) then remove dead cohorts for updateCohortData and redo PG
+      ## the PGs need to be done twice otherwise, once to account for cohorts that only died in some but not all pixels of a given
+      ## pixelGroup, and the second time to ensure that pixels that became similar after the death of some cohorts can
+      ## be grouped together.
+
       unburnedPCohortData <- addPixels2CohortData(copy(sim$cohortData), sim$pixelGroupMap)
       unburnedPCohortData <- unburnedPCohortData[!pixelIndex %in% treedFirePixelTableSinceLastDisp$pixelIndex]
       newPCohortData <- rbind(unburnedPCohortData, burnedPixelCohortData, fill = TRUE)
@@ -418,20 +422,25 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
         }
       }
 
+      ## remove dead cohorts and re-do pixelGroups
+      newPCohortData <- newPCohortData[B > 0]
+      columnsForPG <- c("ecoregionGroup", "speciesCode", "age", "B")
+      cd <- newPCohortData[, c("pixelIndex", columnsForPG), with = FALSE]
+      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPG)]
+
+      pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
+
       ## collapse to PGs
       tempCohortData <- copy(newPCohortData)
       set(tempCohortData, NULL, "pixelIndex", NULL)
       tempCohortData <- tempCohortData[!duplicated(tempCohortData)]
 
-      ## now remove dead cohorts, and keep only original columns
-      tempCohortData <- tempCohortData[B > 0, .SD, .SDcols = names(sim$cohortData)]
-
-      outs <- updateCohortData(newPixelCohortData = postFirePixelCohortData,
-                               cohortData = tempCohortData,
+      outs <- updateCohortData(newPixelCohortData = copy(postFirePixelCohortData),
+                               cohortData = copy(tempCohortData),
                                pixelGroupMap = pixelGroupMap,
                                currentTime = round(time(sim)),
-                               speciesEcoregion = sim$speciesEcoregion,
-                               treedFirePixelTableSinceLastDisp = treedFirePixelTableSinceLastDisp,
+                               speciesEcoregion = copy(sim$speciesEcoregion),
+                               treedFirePixelTableSinceLastDisp = copy(treedFirePixelTableSinceLastDisp),
                                initialB = P(sim)$initialB,
                                successionTimestep = P(sim)$successionTimestep)
 
