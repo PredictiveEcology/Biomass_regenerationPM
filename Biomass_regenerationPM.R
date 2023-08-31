@@ -310,10 +310,6 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     ## make severity map
     severityBMap <- setValues(sim$rasterToMatch, rep(NA, ncell(sim$rasterToMatch)))
     severityBMap[severityData$pixelIndex] <- severityData$severityB
-
-    ## export DT and map
-    sim$severityBMap <- severityBMap
-    sim$severityData <- severityData
   } else {
     ## TODO MAYBE KEEP THE SAME SEVERITY NOTION, BUT THEN USE cfb TO DETERMINE AMOUNT OF BIOMASS
     ## REMOVED PER COHORT ON AN INVERSE AGE WEIGHTED AWAY
@@ -323,6 +319,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   ## CALCULATE SIDE SHADE -----------------------------
   siteShade <- data.table(calcSiteShade(currentTime = round(time(sim)), burnedPixelCohortData,
                                         sim$speciesEcoregion, sim$minRelativeB))
+  siteShade <- siteShade[, .(pixelGroup, siteShade)]
   burnedPixelCohortData <- siteShade[burnedPixelCohortData, on = "pixelGroup", nomatch = NA]
   burnedPixelCohortData[is.na(siteShade), siteShade := 0]
   rm(siteShade)
@@ -452,6 +449,10 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     }
   }
 
+
+  ## export objects
+  sim$severityBMap <- severityBMap
+  sim$severityData <- severityData
   sim$lastFireYear <- time(sim)
 
   ## TODO: Ceres: moved this to here to avoid re-killing/serotiny/repsoruting pixelGroups that burned in the previous year.
