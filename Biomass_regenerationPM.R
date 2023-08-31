@@ -418,7 +418,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       if (getOption("LandR.assertions", TRUE)) {
         test <- setdiff(which(!is.na(pixelGroupMap[])), newPCohortData$pixelIndex)
         if (any(pixelGroupMap[test] != 0)) {
-          stop("Bug in Biomass_regenerationPM: pixels w/o information in burnt and unburnt pixelCohortData tables")
+          stop("Bug in Biomass_regenerationPM: not all pixels are in the joint burnt and unburnt pixelCohortData table")
         }
       }
 
