@@ -18,7 +18,7 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = list("README.txt", "Biomass_regenerationPM.Rmd"),
   reqdPkgs = list("crayon", "data.table", "raster", ## TODO: update package list!
-                  "PredictiveEcology/LandR@LIM (>= 1.0.7.90025)",
+                  "PredictiveEcology/LandR@LIM (>= 1.0.7.9026)",
                   "PredictiveEcology/pemisc@development"),
   parameters = rbind(
     defineParameter("calibrate", "logical", FALSE, desc = "Do calibration? Defaults to FALSE"),
@@ -437,10 +437,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       unburnedPCohortData <- unburnedPCohortData[!pixelIndex %in% treedFirePixelTableSinceLastDisp$pixelIndex]
       newPCohortData <- rbind(unburnedPCohortData, burnedPixelCohortData, fill = TRUE)
 
-      columnsForPG <- c("ecoregionGroup", "speciesCode", "age", "B")
-      cd <- newPCohortData[, c("pixelIndex", columnsForPG), with = FALSE]
-      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPG)]
-
+      cd <- newPCohortData[, c("pixelIndex", columnsForPixelGroups), with = FALSE]
+      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPixelGroups)]
       pixelGroupMap <- sim$pixelGroupMap
       pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
 
@@ -453,16 +451,15 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
       ## remove dead cohorts and re-do pixelGroups
       newPCohortData <- newPCohortData[B > 0]
-      columnsForPG <- c("ecoregionGroup", "speciesCode", "age", "B")
-      cd <- newPCohortData[, c("pixelIndex", columnsForPG), with = FALSE]
-      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPG)]
-
+      cd <- newPCohortData[, c("pixelIndex", columnsForPixelGroups), with = FALSE]
+      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPixelGroups)]
       pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
 
       ## collapse to PGs
       tempCohortData <- copy(newPCohortData)
       set(tempCohortData, NULL, "pixelIndex", NULL)
-      tempCohortData <- tempCohortData[!duplicated(tempCohortData[, .SD, .SDcols = columnsForPixelGroups])]
+      cols <- names(sim$cohortData)   ## need to follow cohortData as there may be other columns in tempCohortData (e.g. siteShade)
+      tempCohortData <- tempCohortData[!duplicated(tempCohortData[, .SD, .SDcols = cols])]
 
       outs <- updateCohortData(newPixelCohortData = copy(postFirePixelCohortData),
                                cohortData = copy(tempCohortData),
