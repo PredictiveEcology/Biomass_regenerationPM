@@ -418,10 +418,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       unburnedPCohortData <- unburnedPCohortData[!pixelIndex %in% treedFirePixelTableSinceLastDisp$pixelIndex]
       newPCohortData <- rbind(unburnedPCohortData, burnedPixelCohortData, fill = TRUE)
 
-      columnsForPG <- c("ecoregionGroup", "speciesCode", "age", "B")
-      cd <- newPCohortData[, c("pixelIndex", columnsForPG), with = FALSE]
-      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPG)]
-
+      cd <- newPCohortData[, c("pixelIndex", columnsForPixelGroups), with = FALSE]
+      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPixelGroups)]
       pixelGroupMap <- sim$pixelGroupMap
       pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
 
