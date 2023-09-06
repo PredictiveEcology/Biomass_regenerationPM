@@ -149,6 +149,14 @@ Init <- function(sim) {
 
 ## Fire disturbance regeneration event
 FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+
+  ## as in B_core
+  if (!suppliedElsewhere("columnsForPixelGroups", sim, where = "sim")) {
+    columnsForPixelGroups <- LandR::columnsForPixelGroups
+  } else {
+    columnsForPixelGroups <- sim$columnsForPixelGroups
+  }
+
   # the presence of valid fire can cause three processes:
   # 1. partially remove species cohorts from the pixels that have been affected.
   # 2. initiate the post-fire regeneration (serotiny and/or resprouting)
@@ -180,7 +188,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     fireCFBRas <- sim$fireCFBRas
   }
 
-  if (isTRUE(getOption("LandR.assertions"))) {
+  if (isTRUE(getOption("LandR.assertions", TRUE))) {
     if (!identical(NROW(sim$cohortData), NROW(unique(sim$cohortData, by = c("pixelGroup", "speciesCode", "age", "B"))))) {
       stop("sim$cohortData has duplicated rows, i.e., multiple rows with the same pixelGroup, speciesCode and age")
     }
@@ -262,11 +270,13 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   severityData <- severityData[, .(pixelIndex, pixelGroup, severity)]
 
   ## add severity to survivor table.
-  if (getOption("LandR.assertions"))
+  if (isTRUE(getOption("LandR.assertions", TRUE))) {
     if (!all(burnedPixelCohortData$pixelGroup %in% severityData$pixelGroup)) {
       warning("Some burnt pixels no fire behaviour indices or severity.\n",
               "Please debug Biomass_regenerationPM::fireDisturbance")
     }
+  }
+
   burnedPixelCohortData <- severityData[burnedPixelCohortData,
                                         on = .(pixelGroup, pixelIndex),
                                         allow.cartesian = TRUE]
@@ -296,7 +306,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     burnedPixelCohortData <- sim$fireDamageTable[burnedPixelCohortData, on = "severityToleranceDif",
                                                  nomatch = NA]
 
-    if (getOption("LandR.assertions", TRUE)) {
+    if (isTRUE(getOption("LandR.assertions", TRUE))) {
       if (!all(is.na(burnedPixelCohortData[(severityToleranceDif > max(sim$fireDamageTable$severityToleranceDif) &
                                          severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif)),
                                       agesKilled])))
@@ -329,10 +339,6 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     ## make severity map
     severityBMap <- setValues(sim$rasterToMatch, rep(NA, ncell(sim$rasterToMatch)))
     severityBMap[severityData$pixelIndex] <- severityData$severityB
-
-    ## export DT and map
-    sim$severityBMap <- severityBMap
-    sim$severityData <- severityData
   } else {
     ## TODO MAYBE KEEP THE SAME SEVERITY NOTION, BUT THEN USE cfb TO DETERMINE AMOUNT OF BIOMASS
     ## REMOVED PER COHORT ON AN INVERSE AGE WEIGHTED AWAY
@@ -342,6 +348,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   ## CALCULATE SIDE SHADE -----------------------------
   siteShade <- data.table(calcSiteShade(currentTime = round(time(sim)), burnedPixelCohortData,
                                         sim$speciesEcoregion, sim$minRelativeB))
+  siteShade <- siteShade[, .(pixelGroup, siteShade)]
   burnedPixelCohortData <- siteShade[burnedPixelCohortData, on = "pixelGroup", nomatch = NA]
   burnedPixelCohortData[is.na(siteShade), siteShade := 0]
   rm(siteShade)
@@ -418,10 +425,14 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       # set(unburnedPCohortData, NULL, "pixelIndex", NULL)  ## collapse pixel groups again
       # unburnedPCohortData <- unburnedPCohortData[!duplicated(unburnedPCohortData)]
 
-      ## redo PGs in all burnt pixels --
-      ## 1) we need to create a table of unburt pixels, and burnt pixels with dead and surviving cohorts of burnt pixels,
+      ## redo PGs in all burnt pixels
+      ## 1) we need to create a table of unburt pixels and burnt pixels with dead and surviving cohorts,
       ## but not new cohorts (serotiny/resprout) -- these are added by updateCohortData
-      ## 2) then remove dead cohorts for updateCohortData
+      ## 2) then remove dead cohorts for updateCohortData and redo PG
+      ## the PGs need to be done twice otherwise, once to account for cohorts that only died in some but not all pixels of a given
+      ## pixelGroup, and the second time to ensure that pixels that became similar after the death of some cohorts can
+      ## be grouped together.
+
       unburnedPCohortData <- addPixels2CohortData(copy(sim$cohortData), sim$pixelGroupMap)
       unburnedPCohortData <- unburnedPCohortData[!pixelIndex %in% treedFirePixelTableSinceLastDisp$pixelIndex]
       newPCohortData <- rbind(unburnedPCohortData, burnedPixelCohortData, fill = TRUE)
@@ -433,27 +444,32 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       pixelGroupMap <- sim$pixelGroupMap
       pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
 
-      if (getOption("LandR.assertions", TRUE)) {
+      if (isTRUE(getOption("LandR.assertions", TRUE))) {
         test <- setdiff(which(!is.na(pixelGroupMap[])), newPCohortData$pixelIndex)
         if (any(pixelGroupMap[test] != 0)) {
-          stop("Bug in Biomass_regenerationPM: pixels w/o information in burnt and unburnt pixelCohortData tables")
+          stop("Bug in Biomass_regenerationPM: not all pixels are in the joint burnt and unburnt pixelCohortData table")
         }
       }
+
+      ## remove dead cohorts and re-do pixelGroups
+      newPCohortData <- newPCohortData[B > 0]
+      columnsForPG <- c("ecoregionGroup", "speciesCode", "age", "B")
+      cd <- newPCohortData[, c("pixelIndex", columnsForPG), with = FALSE]
+      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPG)]
+
+      pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
 
       ## collapse to PGs
       tempCohortData <- copy(newPCohortData)
       set(tempCohortData, NULL, "pixelIndex", NULL)
-      tempCohortData <- tempCohortData[!duplicated(tempCohortData)]
+      tempCohortData <- tempCohortData[!duplicated(tempCohortData[, .SD, .SDcols = columnsForPixelGroups])]
 
-      ## now remove dead cohorts, and keep only original columns
-      tempCohortData <- tempCohortData[B > 0, .SD, .SDcols = names(sim$cohortData)]
-
-      outs <- updateCohortData(newPixelCohortData = postFirePixelCohortData,
-                               cohortData = tempCohortData,
+      outs <- updateCohortData(newPixelCohortData = copy(postFirePixelCohortData),
+                               cohortData = copy(tempCohortData),
                                pixelGroupMap = pixelGroupMap,
                                currentTime = round(time(sim)),
-                               speciesEcoregion = sim$speciesEcoregion,
-                               treedFirePixelTableSinceLastDisp = treedFirePixelTableSinceLastDisp,
+                               speciesEcoregion = copy(sim$speciesEcoregion),
+                               treedFirePixelTableSinceLastDisp = copy(treedFirePixelTableSinceLastDisp),
                                initialB = P(sim)$initialB,
                                successionTimestep = P(sim)$successionTimestep)
 
@@ -471,6 +487,10 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     }
   }
 
+
+  ## export objects
+  sim$severityBMap <- severityBMap
+  sim$severityData <- severityData
   sim$lastFireYear <- time(sim)
 
   ## TODO: Ceres: moved this to here to avoid re-killing/serotiny/repsoruting pixelGroups that burned in the previous year.
