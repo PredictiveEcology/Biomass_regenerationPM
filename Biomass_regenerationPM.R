@@ -169,7 +169,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     fireCFBRas <- sim$fireCFBRas
   }
 
-  if (isTRUE(getOption("LandR.assertions"))) {
+  if (isTRUE(getOption("LandR.assertions", TRUE))) {
     if (!identical(NROW(sim$cohortData), NROW(unique(sim$cohortData, by = c("pixelGroup", "speciesCode", "age", "B"))))) {
       stop("sim$cohortData has duplicated rows, i.e., multiple rows with the same pixelGroup, speciesCode and age")
     }
@@ -251,11 +251,13 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   severityData <- severityData[, .(pixelIndex, pixelGroup, severity)]
 
   ## add severity to survivor table.
-  if (getOption("LandR.assertions"))
+  if (isTRUE(getOption("LandR.assertions", TRUE))) {
     if (!all(burnedPixelCohortData$pixelGroup %in% severityData$pixelGroup)) {
       warning("Some burnt pixels no fire behaviour indices or severity.\n",
               "Please debug Biomass_regenerationPM::fireDisturbance")
     }
+  }
+
   burnedPixelCohortData <- severityData[burnedPixelCohortData,
                                         on = .(pixelGroup, pixelIndex),
                                         allow.cartesian = TRUE]
@@ -285,7 +287,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     burnedPixelCohortData <- sim$fireDamageTable[burnedPixelCohortData, on = "severityToleranceDif",
                                                  nomatch = NA]
 
-    if (getOption("LandR.assertions", TRUE)) {
+    if (isTRUE(getOption("LandR.assertions", TRUE))) {
       if (!all(is.na(burnedPixelCohortData[(severityToleranceDif > max(sim$fireDamageTable$severityToleranceDif) &
                                          severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif)),
                                       agesKilled])))
@@ -423,7 +425,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       pixelGroupMap <- sim$pixelGroupMap
       pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
 
-      if (getOption("LandR.assertions", TRUE)) {
+      if (isTRUE(getOption("LandR.assertions", TRUE))) {
         test <- setdiff(which(!is.na(pixelGroupMap[])), newPCohortData$pixelIndex)
         if (any(pixelGroupMap[test] != 0)) {
           stop("Bug in Biomass_regenerationPM: not all pixels are in the joint burnt and unburnt pixelCohortData table")
