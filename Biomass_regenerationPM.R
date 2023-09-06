@@ -439,7 +439,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       ## collapse to PGs
       tempCohortData <- copy(newPCohortData)
       set(tempCohortData, NULL, "pixelIndex", NULL)
-      tempCohortData <- tempCohortData[!duplicated(tempCohortData[, .SD, .SDcols = columnsForPixelGroups])]
+      cols <- names(sim$cohortData)   ## need to follow cohortData as there may be other columns in tempCohortData (e.g. siteShade)
+      tempCohortData <- tempCohortData[!duplicated(tempCohortData[, .SD, .SDcols = cols])]
 
       outs <- updateCohortData(newPixelCohortData = copy(postFirePixelCohortData),
                                cohortData = copy(tempCohortData),
