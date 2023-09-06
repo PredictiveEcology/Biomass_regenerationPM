@@ -130,6 +130,14 @@ Init <- function(sim) {
 
 ## Fire disturbance regeneration event
 FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+
+  ## as in B_core
+  if (!suppliedElsewhere("columnsForPixelGroups", sim, where = "sim")) {
+    columnsForPixelGroups <- LandR::columnsForPixelGroups
+  } else {
+    columnsForPixelGroups <- sim$columnsForPixelGroups
+  }
+
   # the presence of valid fire can cause three processes:
   # 1. partially remove species cohorts from the pixels that have been affected.
   # 2. initiate the post-fire regeneration (serotiny and/or resprouting)
@@ -433,7 +441,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       ## collapse to PGs
       tempCohortData <- copy(newPCohortData)
       set(tempCohortData, NULL, "pixelIndex", NULL)
-      tempCohortData <- tempCohortData[!duplicated(tempCohortData)]
+      tempCohortData <- tempCohortData[!duplicated(tempCohortData[, .SD, .SDcols = columnsForPixelGroups])]
 
       outs <- updateCohortData(newPixelCohortData = copy(postFirePixelCohortData),
                                cohortData = copy(tempCohortData),
