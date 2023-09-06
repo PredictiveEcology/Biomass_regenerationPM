@@ -432,10 +432,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
       ## remove dead cohorts and re-do pixelGroups
       newPCohortData <- newPCohortData[B > 0]
-      columnsForPG <- c("ecoregionGroup", "speciesCode", "age", "B")
-      cd <- newPCohortData[, c("pixelIndex", columnsForPG), with = FALSE]
-      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPG)]
-
+      cd <- newPCohortData[, c("pixelIndex", columnsForPixelGroups), with = FALSE]
+      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPixelGroups)]
       pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
 
       ## collapse to PGs
