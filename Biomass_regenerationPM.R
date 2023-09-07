@@ -478,9 +478,6 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       sim$cohortData <- outs$cohortData
       sim$pixelGroupMap <- outs$pixelGroupMap
       sim$pixelGroupMap[] <- as.integer(sim$pixelGroupMap[])
-      ##########################################################
-      # rm missing cohorts (i.e., those pixelGroups that are gone due to the fire/treedFirePixelTableSinceLastDisp)
-      ##########################################################
     }
   }
 
