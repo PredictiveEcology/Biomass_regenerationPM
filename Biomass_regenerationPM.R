@@ -53,7 +53,7 @@ defineModule(sim, list(
                  succession time step"),
     expectsInput("fireDamageTable", "data.table",
                  desc = paste("data.table defining upper age limit of cohorts killed by fire depending on the",
-                 "species' fire tolerance values - 'species$firetolerance'. From LANDIS-II Dynamic Fire System v3.0 Manual")),
+                              "species' fire tolerance values - 'species$firetolerance'. From LANDIS-II Dynamic Fire System v3.0 Manual")),
     expectsInput("fireCFBRas", "RasterLayer",
                  desc = "Raster of crown fraction burnt"),
     expectsInput("fireROSRas", "RasterLayer",
@@ -308,8 +308,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
     if (isTRUE(getOption("LandR.assertions", TRUE))) {
       if (!all(is.na(burnedPixelCohortData[(severityToleranceDif > max(sim$fireDamageTable$severityToleranceDif) &
-                                         severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif)),
-                                      agesKilled])))
+                                            severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif)),
+                                           agesKilled])))
         stop("The join of fireDamageTable and burnedPixelCohortData went wrong. agesKilled should be NA
              for site fire damage values outside the range of values in fireDamageTable")
     }
@@ -455,13 +455,29 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPixelGroups)]
       pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
 
+      ## recalculate sumB
+      newPCohortData[, sumB := sum(B, na.rm = TRUE), by = pixelGroup]
+
+      ## check for duplicates at pixel-level
+      if (isTRUE(getOption("LandR.assertions", TRUE))) {
+        if (any(duplicated(newPCohortData[, .(speciesCode, age, pixelIndex)]))) {
+          stop("Duplicate cohorts in pixels were found after burning, serotiny and resprouting")
+        }
+      }
+
       ## collapse to PGs
       tempCohortData <- copy(newPCohortData)
       set(tempCohortData, NULL, "pixelIndex", NULL)
-      cols <- names(sim$cohortData)   ## need to follow cohortData as there may be other columns in tempCohortData (e.g. siteShade)
-      tempCohortData <- tempCohortData[!duplicated(tempCohortData[, .SD, .SDcols = cols])]
+      cols <- c("pixelGroup", "speciesCode", "ecoregionGroup", "age")
+      tempCohortData <- tempCohortData[!duplicated(tempCohortData[, ..cols])]
 
-      outs <- updateCohortData(newPixelCohortData = copy(postFirePixelCohortData),
+      if (isTRUE(getOption("LandR.assertions", TRUE))) {
+        if (any(duplicated(tempCohortData[, .(speciesCode, age, pixelGroup)]))) {
+          stop("Duplicate cohorts in pixelGroups were found after burning, serotiny and resprouting")
+        }
+      }
+
+      outs <- updateCohortData(newPixelCohortData = copy(postFirePixelCohortData[, -"pixelGroup", with = FALSE]),
                                cohortData = copy(tempCohortData),
                                pixelGroupMap = pixelGroupMap,
                                currentTime = round(time(sim)),
