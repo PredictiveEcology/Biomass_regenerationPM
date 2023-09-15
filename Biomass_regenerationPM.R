@@ -37,7 +37,7 @@ defineModule(sim, list(
                  succession time step"),
     expectsInput("fireDamageTable", "data.table",
                  desc = paste("data.table defining upper age limit of cohorts killed by fire depending on the",
-                 "species' fire tolerance values - 'species$firetolerance'. From LANDIS-II Dynamic Fire System v3.0 Manual")),
+                              "species' fire tolerance values - 'species$firetolerance'. From LANDIS-II Dynamic Fire System v3.0 Manual")),
     expectsInput("fireCFBRas", "RasterLayer",
                  desc = "Raster of crown fraction burnt"),
     expectsInput("fireROSRas", "RasterLayer",
@@ -289,8 +289,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
     if (isTRUE(getOption("LandR.assertions", TRUE))) {
       if (!all(is.na(burnedPixelCohortData[(severityToleranceDif > max(sim$fireDamageTable$severityToleranceDif) &
-                                         severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif)),
-                                      agesKilled])))
+                                            severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif)),
+                                           agesKilled])))
         stop("The join of fireDamageTable and burnedPixelCohortData went wrong. agesKilled should be NA
              for site fire damage values outside the range of values in fireDamageTable")
     }
