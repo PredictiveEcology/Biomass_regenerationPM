@@ -458,7 +458,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
         }
       }
 
-      outs <- updateCohortData(newPixelCohortData = copy(postFirePixelCohortData),
+      outs <- updateCohortData(newPixelCohortData = copy(postFirePixelCohortData[, -"pixelGroup", with = FALSE]),
                                cohortData = copy(tempCohortData),
                                pixelGroupMap = pixelGroupMap,
                                currentTime = round(time(sim)),
