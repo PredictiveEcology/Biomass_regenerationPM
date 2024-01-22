@@ -15,6 +15,7 @@ defineModule(sim, list(
   spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
+  loadOrder = list(after = "Biomass_core"),
   citation = list("citation.bib"),
   documentation = list("README.txt", "Biomass_regenerationPM.Rmd"),
   reqdPkgs = list("crayon", "data.table", "raster", ## TODO: update package list!
