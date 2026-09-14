@@ -153,7 +153,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   ## as in B_core
   if (!suppliedElsewhere("columnsForPixelGroups", sim, where = "sim")) {
-    columnsForPixelGroups <- LandR::columnsForPixelGroups
+    columnsForPixelGroups <- LandR::columnsForPixelGroups()
   } else {
     columnsForPixelGroups <- sim$columnsForPixelGroups
   }
