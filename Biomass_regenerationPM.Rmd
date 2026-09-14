@@ -1,8 +1,11 @@
 ---
 title: "Biomass_regenerationPM"
 author: "Ceres Barros, Yong Luo, Eliot McIntire"
-date: "16 August 2018"
-output: pdf_document
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    df_print: paged
+    keep_md: yes
 ---
 
 # Overview
