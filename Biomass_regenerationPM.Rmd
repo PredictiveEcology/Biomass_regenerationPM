@@ -26,10 +26,10 @@ Should a `rstCurrentBurn` exist the module will:
 6. "Initialise" new cohorts by giving them biomass.
 
 
-```{r module_usage}
+```{r module_usage, eval = FALSE}
 library(SpaDES)
 
-setPaths(modulePath = file.path("E:/GitHub/LandscapesInMotion/R/SpaDES/m"))
+setPaths(modulePath = "..") ## the directory containing this module
 getPaths() # shows where the 4 relevant paths are
 
 times <- list(start = 0, end = 10)
