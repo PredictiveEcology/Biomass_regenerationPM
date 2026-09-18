@@ -1,0 +1,57 @@
+---
+title: "Biomass_regenerationPM"
+author: "Ceres Barros, Yong Luo, Eliot McIntire"
+date: "18 September 2026"
+output:
+  html_document:
+    df_print: paged
+    keep_md: yes
+---
+
+# Overview
+
+This module belongs to the LandR-Biomass family of SpaDES modules and, in conjunction with the LandR module 'Biomass_core', it simulates vegetation responses to (fire) disturbances: mortality, serotinous regeneration and regeneration by resprouting. 
+
+It's functioning is very similar to taht of [LandR] Biomass_regeneration, the difference being that Biomass_regenerationPM *does not* assume stand replacing fires. Instead, this module follows the partial mortality mechanisms in the LANDIS-II Dynamic Fire System Extension (v. 3.0) and kills cohorts depending on the fire severity and species' fire tolerances.
+Hence, unlike in the Biomass_regeneration module, new cohorts regerating via serotiny or resprouting will have to deal with shade conditions, should a fire only partially kill a stand.
+
+Because the module was programmed to respond to fire disturbances, it will only "do domething" if the user, or another module, provide a raster of burned pixels (`rstCurrentBurn`). Should this raster be missing, the module will not fail, but it also won't change any cohort. This is important because should another (fire) module provide a `rstCurrentBurn` the user must be aware that in non-fire years, this object must be "emptied".
+
+Also, the calculation of fire severity depends on 3 other rasters of fire behaviour properties: crown fraction burnt (`fireCFBRas`), fire equilibrium rate of spread (`fireROSRas`) and fire critical spread rate for crowning (`fireRSORas`). *Dummy* versions of theres rasters will be generated based on a supplied `rstCurrentBurn`, however the user can choose to pair this module with Biomass_fireProperties and Biomass_fuels (the later needing Biomass_core to run), for  fuel calculations and fire behaviour based on simulated vegetation and climate data.
+
+# Functioning
+Should a `rstCurrentBurn` exist the module will:
+1. Assess which pixels were burnt
+2. Calculate fire severity, based on the fuel types that were present in these pixels, as well as weather conditions
+3. Compare pixel severity with the fire tolerances of the species that were present in burnt pixels and kill cohorts accordingly (see LANDIS-II Dynamic Fire System Extension v3.0 manual for more detail).
+4. Activate serotiny depending on which species were present in the pixel and shading conditions
+5. For pixels where no serotiny happened, activate resprouting depending on which species were present in the pixel and shading conditions
+6. "Initialise" new cohorts by giving them biomass.
+
+
+
+``` r
+library(SpaDES)
+
+setPaths(modulePath = "..") ## the directory containing this module
+getPaths() # shows where the 4 relevant paths are
+
+times <- list(start = 0, end = 10)
+
+parameters <- list(
+  #.progress = list(type = "text", interval = 1), # for a progress bar
+  ## If there are further modules, each can have its own set of parameters:
+  #module1 = list(param1 = value1, param2 = value2),
+  #module2 = list(param1 = value1, param2 = value2)
+)
+modules <- list("Biomass_regenerationPM")
+objects <- list()
+inputs <- list()
+outputs <- list()
+
+mySim <- simInit(times = times, params = parameters, modules = modules,
+                 objects = objects)
+
+mySimOut <- spades(mySim)
+```
+
