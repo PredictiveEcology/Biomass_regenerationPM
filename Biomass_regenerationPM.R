@@ -12,13 +12,12 @@ defineModule(sim, list(
   authors = person("Ceres", "Barros", email = "cbarros@mail.ubc.ca", role = c("aut", "cre")),
   childModules = character(0),
   version = list(Biomass_regenerationPM = "0.2.0"),
-  spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   loadOrder = list(after = "Biomass_core"),
   citation = list("citation.bib"),
   documentation = list("README.txt", "Biomass_regenerationPM.Rmd"),
-  reqdPkgs = list("crayon", "data.table", "raster", ## TODO: update package list!
+  reqdPkgs = list("crayon", "data.table", "terra",
                   "PredictiveEcology/LandR@LIM (>= 1.0.7.9026)",
                   "PredictiveEcology/pemisc@development"),
   parameters = rbind(
@@ -55,17 +54,17 @@ defineModule(sim, list(
     expectsInput("fireDamageTable", "data.table",
                  desc = paste("data.table defining upper age limit of cohorts killed by fire depending on the",
                               "species' fire tolerance values - 'species$firetolerance'. From LANDIS-II Dynamic Fire System v3.0 Manual")),
-    expectsInput("fireCFBRas", "RasterLayer",
+    expectsInput("fireCFBRas", "SpatRaster",
                  desc = "Raster of crown fraction burnt"),
-    expectsInput("fireROSRas", "RasterLayer",
+    expectsInput("fireROSRas", "SpatRaster",
                  desc = "Raster of equilibrium rate of spread [m/min]"),
-    expectsInput("fireRSORas", "RasterLayer",
+    expectsInput("fireRSORas", "SpatRaster",
                  desc = "Critical spread rate for crowning [m/min]"),
     expectsInput("inactivePixelIndex", "logical",
                  desc = "internal use. Keeps track of which pixels are inactive"),
-    expectsInput("pixelGroupMap", "RasterLayer",
+    expectsInput("pixelGroupMap", "SpatRaster",
                  desc = "updated community map at each succession time step"),
-    expectsInput("rstCurrentBurn", "RasterLayer",
+    expectsInput("rstCurrentBurn", "SpatRaster",
                  desc = "Binary raster of fires, 1 meaning 'burned', 0 or NA is non-burned"),
     expectsInput("species", "data.table",
                  desc = "a table that has species traits such as longevity...",
@@ -85,13 +84,13 @@ defineModule(sim, list(
                                "by pixelGroupIndex at succession time step")),
     createsOutput("lastFireYear", "numeric",
                   desc = "Year of the most recent fire year"),
-    createsOutput("pixelGroupMap", "RasterLayer",
+    createsOutput("pixelGroupMap", "SpatRaster",
                   desc = "updated community map at each succession time step"),
     createsOutput("postFireRegenSummary", "data.table",
                   desc = "summary table of species post-fire regeneration"),
     createsOutput("serotinyResproutSuccessPixels", "numeric",
                   desc = "Pixels that were successfully regenerated via serotiny or resprouting. This is a subset of treedBurnLoci"),
-    createsOutput("severityBMap", "RasterLayer",
+    createsOutput("severityBMap", "SpatRaster",
                   desc = "A map of fire severity, as in the amount of post-fire mortality (biomass loss)"),
     createsOutput("severityData", "data.table",
                   desc = "A data.table of pixel fire severity, as in the amount of post-fire mortality (biomass loss).
@@ -172,14 +171,14 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                "  fireRSORas, fireROSRas and fireCFBRas.\n",
                                "  DUMMY RASTERS will be used - if this is not intended, please \n",
                                "  use a fire module that provides them (e.g. FavierFireSpread)")))
-    vals <- getValues(sim$rstCurrentBurn)
+    vals <- terra::values(sim$rstCurrentBurn, mat = FALSE)
     valsRSO <- valsROS <- valsCFB <- integer(0)
     valsRSO[!is.na(vals)] <- as.integer(round(runif(sum(!is.na(vals)), 0, 100)))
     valsROS[!is.na(vals)] <- as.integer(round(runif(sum(!is.na(vals)), 0, 100)))
     valsCFB[!is.na(vals)] <- runif(sum(!is.na(vals)), 0, 1)
-    fireRSORas <- setValues(sim$rstCurrentBurn, valsRSO)
-    fireROSRas <- setValues(sim$rstCurrentBurn, valsROS)
-    fireCFBRas <- setValues(sim$rstCurrentBurn, valsCFB)
+    fireRSORas <- terra::setValues(sim$rstCurrentBurn, valsRSO)
+    fireROSRas <- terra::setValues(sim$rstCurrentBurn, valsROS)
+    fireCFBRas <- terra::setValues(sim$rstCurrentBurn, valsCFB)
   } else {
     ## create copies, so that when dummies need to be used
     ## they are not detected in sim, but can still be updated using
@@ -214,7 +213,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   }
 
   ## extract burn pixel indices/groups and remove potentially inactive pixels
-  burnedLoci <- which(getValues(sim$rstCurrentBurn) > 0)
+  burnedLoci <- which(terra::values(sim$rstCurrentBurn, mat = FALSE) > 0)
   treedBurnLoci <- if (length(sim$inactivePixelIndex) > 0) {
     # These can burn other vegetation (grassland, wetland)
     burnedLoci[!(burnedLoci %in% sim$inactivePixelIndex)] # this is to prevent evaluating the pixels that are inactive
@@ -223,13 +222,13 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   }
 
   treedFirePixelTableSinceLastDisp <- data.table(pixelIndex = as.integer(treedBurnLoci),
-                                                 pixelGroup = as.integer(getValues(sim$pixelGroupMap)[treedBurnLoci]),
+                                                 pixelGroup = as.integer(terra::values(sim$pixelGroupMap, mat = FALSE)[treedBurnLoci]),
                                                  burnTime = time(sim))
 
   ## TODO: Ceres: I don't think we should be bring in the previously burnt pixelGroups at this point
   ##  solution (?) code was ciopy-paste to before the export to sim
   # ## update past pixelGroup number to match current ones.
-  # sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(getValues(sim$pixelGroupMap))[pixelIndex]]
+  # sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(terra::values(sim$pixelGroupMap, mat = FALSE))[pixelIndex]]
   # # append previous year's
   # treedFirePixelTableSinceLastDisp <- rbindlist(list(sim$treedFirePixelTableSinceLastDisp,
   #                                                    treedFirePixelTableSinceLastDisp))
@@ -254,11 +253,11 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                             nomatch = 0, on = "pixelGroup"]
 
   severityData <- data.table(pixelIndex = 1:ncell(sim$pixelGroupMap),
-                             pixelGroup = getValues(sim$pixelGroupMap),
-                             burntPixels = getValues(sim$rstCurrentBurn),
-                             RSO = getValues(fireRSORas),
-                             ROS = getValues(fireROSRas),
-                             CFB = getValues(fireCFBRas))
+                             pixelGroup = terra::values(sim$pixelGroupMap, mat = FALSE),
+                             burntPixels = terra::values(sim$rstCurrentBurn, mat = FALSE),
+                             RSO = terra::values(fireRSORas, mat = FALSE),
+                             ROS = terra::values(fireROSRas, mat = FALSE),
+                             CFB = terra::values(fireCFBRas, mat = FALSE))
   severityData <- na.omit(severityData)
 
   severityData[CFB < 0.1 & ROS < (RSO + 0.458)/2, severity := 1]
@@ -338,7 +337,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     severityData <- severityData[severityData2, on = cols]
 
     ## make severity map
-    severityBMap <- setValues(sim$rasterToMatch, rep(NA, ncell(sim$rasterToMatch)))
+    severityBMap <- terra::setValues(sim$rasterToMatch, rep(NA, ncell(sim$rasterToMatch)))
     severityBMap[severityData$pixelIndex] <- severityData$severityB
   } else {
     ## TODO MAYBE KEEP THE SAME SEVERITY NOTION, BUT THEN USE cfb TO DETERMINE AMOUNT OF BIOMASS
@@ -506,7 +505,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   ## TODO: Ceres: moved this to here to avoid re-killing/serotiny/repsoruting pixelGroups that burned in the previous year.
   ## update past pixelGroup number to match current ones.
-  sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(getValues(sim$pixelGroupMap))[pixelIndex]]
+  sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(terra::values(sim$pixelGroupMap, mat = FALSE))[pixelIndex]]
   # append previous year's
   treedFirePixelTableSinceLastDisp <- rbindlist(list(sim$treedFirePixelTableSinceLastDisp,
                                                      treedFirePixelTableSinceLastDisp))
