@@ -1,3 +1,5 @@
+# Biomass_regenerationPM (development version)
+
 # Biomass_regenerationPM 0.3.0
 
 This release updates the module for current versions of the SpaDES and LandR tools. It now reads and writes maps with the terra package instead of the retired raster package, and follows the LandR development branch.
