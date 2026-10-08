@@ -1,7 +1,7 @@
 ---
 title: "Biomass_regenerationPM"
 author: "Ceres Barros, Yong Luo, Eliot McIntire"
-date: "`r format(Sys.time(), '%d %B %Y')`"
+date: "08 October 2026"
 output:
   html_document:
     df_print: paged
@@ -29,7 +29,8 @@ Should a `rstCurrentBurn` exist the module will:
 6. "Initialise" new cohorts by giving them biomass.
 
 
-```{r module_usage, eval = FALSE}
+
+``` r
 library(SpaDES)
 
 setPaths(modulePath = "..") ## the directory containing this module

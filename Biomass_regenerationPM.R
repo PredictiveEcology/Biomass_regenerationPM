@@ -11,14 +11,14 @@ defineModule(sim, list(
   keywords = c("biomass regeneration", "LandR", "disturbance", "mortality", "vegetation succession", "vegetation model"),
   authors = person("Ceres", "Barros", email = "cbarros@mail.ubc.ca", role = c("aut", "cre")),
   childModules = character(0),
-  version = list(Biomass_regenerationPM = "0.2.0"),
-  spatialExtent = raster::extent(rep(NA_real_, 4)),
+  version = list(Biomass_regenerationPM = "0.3.0"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
+  loadOrder = list(after = "Biomass_core"),
   citation = list("citation.bib"),
   documentation = list("README.txt", "Biomass_regenerationPM.Rmd"),
-  reqdPkgs = list("crayon", "data.table", "raster", ## TODO: update package list!
-                  "PredictiveEcology/LandR@development (>= 1.0.3)",
+  reqdPkgs = list("crayon", "data.table", "terra",
+                  "PredictiveEcology/LandR@development (>= 1.2.0.9026)",
                   "PredictiveEcology/pemisc@development"),
   parameters = rbind(
     defineParameter("calibrate", "logical", FALSE, desc = "Do calibration? Defaults to FALSE"),
@@ -26,28 +26,45 @@ defineModule(sim, list(
                     desc = "The event time that the first fire disturbance event occurs"),
     defineParameter("fireTimestep", "numeric", NA,
                     desc = "The number of time units between successive fire events in a fire module"),
+    defineParameter("initialB", "numeric", 10, 1, NA,
+                    desc = paste("initial biomass values of new age-1 cohorts.",
+                                 "If `NA` or `NULL`, initial biomass will be calculated as in LANDIS-II Biomass Suc. Extension",
+                                 "(see Scheller and Miranda, 2015 or `?LandR::.initiateNewCohorts`)")),
     defineParameter("LANDISPM", "logical", TRUE,
                     desc = "Use LANDIS-II version of partial fire-driven mortality? See LANDIS-II Dynamic Fire System v3.0"),
-    defineParameter("successionTimestep", "numeric", 10L, NA, NA, "defines the simulation time step, default is 10 years")
+    defineParameter("successionTimestep", "numeric", 10L, NA, NA, "defines the simulation time step, default is 10 years"),
+    defineParameter(".plots", "character", "screen", NA, NA,
+                    "Used by Plots function, which can be optionally used here"),
+    defineParameter(".plotInitialTime", "numeric", start(sim), NA, NA,
+                    "This describes the simulation time at which the first plot event should occur"),
+    defineParameter(".plotInterval", "numeric", NA, NA, NA,
+                    "This describes the simulation time interval between plot events"),
+    defineParameter(".saveInitialTime", "numeric", NA, NA, NA,
+                    "This describes the simulation time at which the first save event should occur"),
+    defineParameter(".saveInterval", "numeric", NA, NA, NA,
+                    "This describes the simulation time interval between save events"),
+    defineParameter(".useCache", "character", c(".inputObjects", "init"), NA, NA,
+                    desc = paste("Should this entire module be run with caching activated?",
+                                 "This is generally intended for data-type modules, where stochasticity and time are not relevant"))
   ),
   inputObjects = bindrows(
     expectsInput("cohortData", "data.table",
                  desc = "age cohort-biomass table hooked to pixel group map by pixelGroupIndex at
                  succession time step"),
     expectsInput("fireDamageTable", "data.table",
-                 desc = "data.table defining upper age limit of cohorts killed by fire.
-                 From LANDIS-II Dynamic Fire System v3.0 Manual"),
-    expectsInput("fireCFBRas", "RasterLayer",
+                 desc = paste("data.table defining upper age limit of cohorts killed by fire depending on the",
+                              "species' fire tolerance values - 'species$firetolerance'. From LANDIS-II Dynamic Fire System v3.0 Manual")),
+    expectsInput("fireCFBRas", "SpatRaster",
                  desc = "Raster of crown fraction burnt"),
-    expectsInput("fireROSRas", "RasterLayer",
+    expectsInput("fireROSRas", "SpatRaster",
                  desc = "Raster of equilibrium rate of spread [m/min]"),
-    expectsInput("fireRSORas", "RasterLayer",
+    expectsInput("fireRSORas", "SpatRaster",
                  desc = "Critical spread rate for crowning [m/min]"),
     expectsInput("inactivePixelIndex", "logical",
                  desc = "internal use. Keeps track of which pixels are inactive"),
-    expectsInput("pixelGroupMap", "RasterLayer",
+    expectsInput("pixelGroupMap", "SpatRaster",
                  desc = "updated community map at each succession time step"),
-    expectsInput("rstCurrentBurn", "RasterLayer",
+    expectsInput("rstCurrentBurn", "SpatRaster",
                  desc = "Binary raster of fires, 1 meaning 'burned', 0 or NA is non-burned"),
     expectsInput("species", "data.table",
                  desc = "a table that has species traits such as longevity...",
@@ -67,13 +84,13 @@ defineModule(sim, list(
                                "by pixelGroupIndex at succession time step")),
     createsOutput("lastFireYear", "numeric",
                   desc = "Year of the most recent fire year"),
-    createsOutput("pixelGroupMap", "RasterLayer",
+    createsOutput("pixelGroupMap", "SpatRaster",
                   desc = "updated community map at each succession time step"),
     createsOutput("postFireRegenSummary", "data.table",
                   desc = "summary table of species post-fire regeneration"),
     createsOutput("serotinyResproutSuccessPixels", "numeric",
                   desc = "Pixels that were successfully regenerated via serotiny or resprouting. This is a subset of treedBurnLoci"),
-    createsOutput("severityBMap", "RasterLayer",
+    createsOutput("severityBMap", "SpatRaster",
                   desc = "A map of fire severity, as in the amount of post-fire mortality (biomass loss)"),
     createsOutput("severityData", "data.table",
                   desc = "A data.table of pixel fire severity, as in the amount of post-fire mortality (biomass loss).
@@ -124,11 +141,22 @@ Init <- function(sim) {
   if (is.na(P(sim)$fireTimestep))
     stop(paste("Please provide a value for `P(sim)$fireTimestep`.",
                "It should match the fire time step (fire frequency)."))
+
+  paramCheckOtherMods(sim, "initialB", ifSetButDifferent = "warning")
+
   return(invisible(sim))
 }
 
 ## Fire disturbance regeneration event
 FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+
+  ## as in B_core
+  if (!suppliedElsewhere("columnsForPixelGroups", sim, where = "sim")) {
+    columnsForPixelGroups <- LandR::columnsForPixelGroups()
+  } else {
+    columnsForPixelGroups <- sim$columnsForPixelGroups
+  }
+
   # the presence of valid fire can cause three processes:
   # 1. partially remove species cohorts from the pixels that have been affected.
   # 2. initiate the post-fire regeneration (serotiny and/or resprouting)
@@ -142,15 +170,15 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     message(crayon::red(paste0("Biomass_regenerationPM is missing one/several of the following rasters:\n",
                                "  fireRSORas, fireROSRas and fireCFBRas.\n",
                                "  DUMMY RASTERS will be used - if this is not intended, please \n",
-                               "  use a fire module that provides them (e.g. fireSpread)")))
-    vals <- getValues(sim$rstCurrentBurn)
+                               "  use a fire module that provides them (e.g. FavierFireSpread)")))
+    vals <- terra::values(sim$rstCurrentBurn, mat = FALSE)
     valsRSO <- valsROS <- valsCFB <- integer(0)
     valsRSO[!is.na(vals)] <- as.integer(round(runif(sum(!is.na(vals)), 0, 100)))
     valsROS[!is.na(vals)] <- as.integer(round(runif(sum(!is.na(vals)), 0, 100)))
     valsCFB[!is.na(vals)] <- runif(sum(!is.na(vals)), 0, 1)
-    fireRSORas <- setValues(sim$rstCurrentBurn, valsRSO)
-    fireROSRas <- setValues(sim$rstCurrentBurn, valsROS)
-    fireCFBRas <- setValues(sim$rstCurrentBurn, valsCFB)
+    fireRSORas <- terra::setValues(sim$rstCurrentBurn, valsRSO)
+    fireROSRas <- terra::setValues(sim$rstCurrentBurn, valsROS)
+    fireCFBRas <- terra::setValues(sim$rstCurrentBurn, valsCFB)
   } else {
     ## create copies, so that when dummies need to be used
     ## they are not detected in sim, but can still be updated using
@@ -160,7 +188,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     fireCFBRas <- sim$fireCFBRas
   }
 
-  if (isTRUE(getOption("LandR.assertions"))) {
+  if (isTRUE(getOption("LandR.assertions", TRUE))) {
     if (!identical(NROW(sim$cohortData), NROW(unique(sim$cohortData, by = c("pixelGroup", "speciesCode", "age", "B"))))) {
       stop("sim$cohortData has duplicated rows, i.e., multiple rows with the same pixelGroup, speciesCode and age")
     }
@@ -185,7 +213,7 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   }
 
   ## extract burn pixel indices/groups and remove potentially inactive pixels
-  burnedLoci <- which(getValues(sim$rstCurrentBurn) > 0)
+  burnedLoci <- which(terra::values(sim$rstCurrentBurn, mat = FALSE) > 0)
   treedBurnLoci <- if (length(sim$inactivePixelIndex) > 0) {
     # These can burn other vegetation (grassland, wetland)
     burnedLoci[!(burnedLoci %in% sim$inactivePixelIndex)] # this is to prevent evaluating the pixels that are inactive
@@ -194,13 +222,13 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   }
 
   treedFirePixelTableSinceLastDisp <- data.table(pixelIndex = as.integer(treedBurnLoci),
-                                                 pixelGroup = as.integer(getValues(sim$pixelGroupMap)[treedBurnLoci]),
+                                                 pixelGroup = as.integer(terra::values(sim$pixelGroupMap, mat = FALSE)[treedBurnLoci]),
                                                  burnTime = time(sim))
 
   ## TODO: Ceres: I don't think we should be bring in the previously burnt pixelGroups at this point
   ##  solution (?) code was ciopy-paste to before the export to sim
   # ## update past pixelGroup number to match current ones.
-  # sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(getValues(sim$pixelGroupMap))[pixelIndex]]
+  # sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(terra::values(sim$pixelGroupMap, mat = FALSE))[pixelIndex]]
   # # append previous year's
   # treedFirePixelTableSinceLastDisp <- rbindlist(list(sim$treedFirePixelTableSinceLastDisp,
   #                                                    treedFirePixelTableSinceLastDisp))
@@ -225,11 +253,11 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                             nomatch = 0, on = "pixelGroup"]
 
   severityData <- data.table(pixelIndex = 1:ncell(sim$pixelGroupMap),
-                             pixelGroup = getValues(sim$pixelGroupMap),
-                             burntPixels = getValues(sim$rstCurrentBurn),
-                             RSO = getValues(fireRSORas),
-                             ROS = getValues(fireROSRas),
-                             CFB = getValues(fireCFBRas))
+                             pixelGroup = terra::values(sim$pixelGroupMap, mat = FALSE),
+                             burntPixels = terra::values(sim$rstCurrentBurn, mat = FALSE),
+                             RSO = terra::values(fireRSORas, mat = FALSE),
+                             ROS = terra::values(fireROSRas, mat = FALSE),
+                             CFB = terra::values(fireCFBRas, mat = FALSE))
   severityData <- na.omit(severityData)
 
   severityData[CFB < 0.1 & ROS < (RSO + 0.458)/2, severity := 1]
@@ -242,11 +270,13 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   severityData <- severityData[, .(pixelIndex, pixelGroup, severity)]
 
   ## add severity to survivor table.
-  if (getOption("LandR.assertions"))
+  if (isTRUE(getOption("LandR.assertions", TRUE))) {
     if (!all(burnedPixelCohortData$pixelGroup %in% severityData$pixelGroup)) {
       warning("Some burnt pixels no fire behaviour indices or severity.\n",
               "Please debug Biomass_regenerationPM::fireDisturbance")
     }
+  }
+
   burnedPixelCohortData <- severityData[burnedPixelCohortData,
                                         on = .(pixelGroup, pixelIndex),
                                         allow.cartesian = TRUE]
@@ -271,15 +301,15 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     ## find the % reduction in biomass:
     ## agesKilled w/ NAs come from observed severityToleranceDif having no matches in table,
     ## so they are beyond the range of values
-    ## if the observed severityToleranceDif is higher than table values, then  the fire damage is maximum
+    ## if the observed severityToleranceDif is higher than table values, then the fire damage is maximum
     ## if the observed severityToleranceDif is lower than table values, then there is no fire damage
     burnedPixelCohortData <- sim$fireDamageTable[burnedPixelCohortData, on = "severityToleranceDif",
                                                  nomatch = NA]
 
-    if (getOption("LandR.assertions", TRUE)) {
+    if (isTRUE(getOption("LandR.assertions", TRUE))) {
       if (!all(is.na(burnedPixelCohortData[(severityToleranceDif > max(sim$fireDamageTable$severityToleranceDif) &
-                                         severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif)),
-                                      agesKilled])))
+                                            severityToleranceDif < min(sim$fireDamageTable$severityToleranceDif)),
+                                           agesKilled])))
         stop("The join of fireDamageTable and burnedPixelCohortData went wrong. agesKilled should be NA
              for site fire damage values outside the range of values in fireDamageTable")
     }
@@ -307,12 +337,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     severityData <- severityData[severityData2, on = cols]
 
     ## make severity map
-    severityBMap <- setValues(sim$rasterToMatch, rep(NA, ncell(sim$rasterToMatch)))
+    severityBMap <- terra::setValues(sim$rasterToMatch, rep(NA, ncell(sim$rasterToMatch)))
     severityBMap[severityData$pixelIndex] <- severityData$severityB
-
-    ## export DT and map
-    sim$severityBMap <- severityBMap
-    sim$severityData <- severityData
   } else {
     ## TODO MAYBE KEEP THE SAME SEVERITY NOTION, BUT THEN USE cfb TO DETERMINE AMOUNT OF BIOMASS
     ## REMOVED PER COHORT ON AN INVERSE AGE WEIGHTED AWAY
@@ -322,9 +348,9 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   ## CALCULATE SIDE SHADE -----------------------------
   siteShade <- data.table(calcSiteShade(currentTime = round(time(sim)), burnedPixelCohortData,
                                         sim$speciesEcoregion, sim$minRelativeB))
-
+  siteShade <- siteShade[, .(pixelGroup, siteShade)]
   burnedPixelCohortData <- siteShade[burnedPixelCohortData, on = "pixelGroup", nomatch = NA]
-  burnedPixelCohortData <- burnedPixelCohortData[is.na(siteShade), siteShade := 0]
+  burnedPixelCohortData[is.na(siteShade), siteShade := 0]
   rm(siteShade)
 
   ## clean burnedPixelCohortData from unnecessary columns
@@ -348,8 +374,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   postFirePixelCohortData <- serotinyOutputs$postFirePixelCohortData
   serotinyPixel <- serotinyOutputs$serotinyPixel
 
-  if (!is.null(serotinyOutputs$postFireRegserotinyOuputs))
-    sim$postFireRegserotinyOuputs <- serotinyOutputs$postFireRegserotinyOuputs
+  if (!is.null(serotinyOutputs$postFireRegenSummary))
+    sim$postFireRegenSummary <- serotinyOutputs$postFireRegenSummary
 
   rm(serotinyOutputs)
 
@@ -367,8 +393,8 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   postFirePixelCohortData <- resproutingOutputs$postFirePixelCohortData
   sim$serotinyResproutSuccessPixels <- resproutingOutputs$serotinyResproutSuccessPixels
-  if (!is.null(resproutingOutputs$postFireRegserotinyOuputs))
-    sim$postFireRegserotinyOuputs <- resproutingOutputs$postFireRegserotinyOuputs
+  if (!is.null(resproutingOutputs$postFireRegenSummary))
+    sim$postFireRegenSummary <- resproutingOutputs$postFireRegenSummary
 
   rm(resproutingOutputs)
 
@@ -392,34 +418,94 @@ FireDisturbance <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       ## set ages to 1 here, because updateCohortData will only so so if there isn't an age column
       postFirePixelCohortData[is.na(age), age := 1L]
 
-      ## filter cohortData to only have unburnt pixels
-      unburnedCohortData <- addPixels2CohortData(copy(sim$cohortData), sim$pixelGroupMap)
-      unburnedCohortData <- unburnedCohortData[!pixelIndex %in% treedFirePixelTableSinceLastDisp$pixelIndex]
-      set(unburnedCohortData, NULL, "pixelIndex", NULL)  ## collapse pixel groups again
-      unburnedCohortData <- unburnedCohortData[!duplicated(unburnedCohortData)]
+      ## filter cohortData to only have unburnt pixels -- this is not sufficient!!!
+      ## in PGs where cohorts die in one but not other pixels, these cohorts from other pixels are added back where they were supposed to be removed.
+      # unburnedPCohortData <- addPixels2CohortData(copy(sim$cohortData), sim$pixelGroupMap)
+      # unburnedPCohortData <- unburnedPCohortData[!pixelIndex %in% treedFirePixelTableSinceLastDisp$pixelIndex]
+      # set(unburnedPCohortData, NULL, "pixelIndex", NULL)  ## collapse pixel groups again
+      # unburnedPCohortData <- unburnedPCohortData[!duplicated(unburnedPCohortData)]
 
-      outs <- updateCohortData(newPixelCohortData = postFirePixelCohortData,
-                               cohortData = unburnedCohortData,
-                               pixelGroupMap = sim$pixelGroupMap,
+      ## redo PGs in all burnt pixels
+      ## 1) we need to create a table of unburt pixels and burnt pixels with dead and surviving cohorts,
+      ## but not new cohorts (serotiny/resprout) -- these are added by updateCohortData
+      ## 2) then remove dead cohorts for updateCohortData and redo PG
+      ## the PGs need to be done twice otherwise, once to account for cohorts that only died in some but not all pixels of a given
+      ## pixelGroup, and the second time to ensure that pixels that became similar after the death of some cohorts can
+      ## be grouped together.
+
+      unburnedPCohortData <- addPixels2CohortData(copy(sim$cohortData), sim$pixelGroupMap)
+      unburnedPCohortData <- unburnedPCohortData[!pixelIndex %in% treedFirePixelTableSinceLastDisp$pixelIndex]
+      newPCohortData <- rbind(unburnedPCohortData, burnedPixelCohortData, fill = TRUE)
+
+      cd <- newPCohortData[, c("pixelIndex", columnsForPixelGroups), with = FALSE]
+      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPixelGroups)]
+      pixelGroupMap <- sim$pixelGroupMap
+      pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
+
+      if (isTRUE(getOption("LandR.assertions", TRUE))) {
+        test <- setdiff(which(!is.na(pixelGroupMap[])), newPCohortData$pixelIndex)
+        if (any(pixelGroupMap[test] != 0)) {
+          stop("Bug in Biomass_regenerationPM: not all pixels are in the joint burnt and unburnt pixelCohortData table")
+        }
+      }
+
+      ## remove dead cohorts and re-do pixelGroups
+      newPCohortData <- newPCohortData[B > 0]
+      cd <- newPCohortData[, c("pixelIndex", columnsForPixelGroups), with = FALSE]
+      newPCohortData[, pixelGroup := generatePixelGroups(cd, maxPixelGroup = 0L, columns = columnsForPixelGroups)]
+      pixelGroupMap[newPCohortData$pixelIndex] <- newPCohortData$pixelGroup
+
+      ## recalculate sumB
+      newPCohortData[, sumB := sum(B, na.rm = TRUE), by = pixelGroup]
+
+      ## check for duplicates at pixel-level
+      if (isTRUE(getOption("LandR.assertions", TRUE))) {
+        if (any(duplicated(newPCohortData[, .(speciesCode, age, pixelIndex)]))) {
+          stop("Duplicate cohorts in pixels were found after burning, serotiny and resprouting")
+        }
+      }
+
+      ## collapse to PGs
+      tempCohortData <- copy(newPCohortData)
+      set(tempCohortData, NULL, "pixelIndex", NULL)
+      cols <- c("pixelGroup", "speciesCode", "ecoregionGroup", "age")
+      tempCohortData <- tempCohortData[!duplicated(tempCohortData[, ..cols])]
+
+      if (isTRUE(getOption("LandR.assertions", TRUE))) {
+        if (any(duplicated(tempCohortData[, .(speciesCode, age, pixelGroup)]))) {
+          stop("Duplicate cohorts in pixelGroups were found after burning, serotiny and resprouting")
+        }
+      }
+
+      outs <- updateCohortData(newPixelCohortData = copy(postFirePixelCohortData[, -"pixelGroup", with = FALSE]),
+                               cohortData = copy(tempCohortData),
+                               pixelGroupMap = pixelGroupMap,
                                currentTime = round(time(sim)),
-                               speciesEcoregion = sim$speciesEcoregion,
-                               treedFirePixelTableSinceLastDisp = treedFirePixelTableSinceLastDisp,
+                               speciesEcoregion = copy(sim$speciesEcoregion),
+                               treedFirePixelTableSinceLastDisp = copy(treedFirePixelTableSinceLastDisp),
+                               initialB = P(sim)$initialB,
                                successionTimestep = P(sim)$successionTimestep)
+
+      assertPostFireDist(cohortDataOrig = tempCohortData, pixelGroupMapOrig = pixelGroupMap,
+                         cohortDataNew = outs$cohortData, pixelGroupMapNew = outs$pixelGroupMap,
+                         postFirePixelCohortData = postFirePixelCohortData,
+                         burnedPixelCohortData, doAssertion = getOption("LandR.assertions", TRUE))
 
       sim$cohortData <- outs$cohortData
       sim$pixelGroupMap <- outs$pixelGroupMap
       sim$pixelGroupMap[] <- as.integer(sim$pixelGroupMap[])
-      ##########################################################
-      # rm missing cohorts (i.e., those pixelGroups that are gone due to the fire/treedFirePixelTableSinceLastDisp)
-      ##########################################################
     }
   }
 
+
+  ## export objects
+  sim$severityBMap <- severityBMap
+  sim$severityData <- severityData
   sim$lastFireYear <- time(sim)
 
   ## TODO: Ceres: moved this to here to avoid re-killing/serotiny/repsoruting pixelGroups that burned in the previous year.
   ## update past pixelGroup number to match current ones.
-  sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(getValues(sim$pixelGroupMap))[pixelIndex]]
+  sim$treedFirePixelTableSinceLastDisp[, pixelGroup := as.integer(terra::values(sim$pixelGroupMap, mat = FALSE))[pixelIndex]]
   # append previous year's
   treedFirePixelTableSinceLastDisp <- rbindlist(list(sim$treedFirePixelTableSinceLastDisp,
                                                      treedFirePixelTableSinceLastDisp))
