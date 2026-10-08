@@ -11,7 +11,7 @@ defineModule(sim, list(
   keywords = c("biomass regeneration", "LandR", "disturbance", "mortality", "vegetation succession", "vegetation model"),
   authors = person("Ceres", "Barros", email = "cbarros@mail.ubc.ca", role = c("aut", "cre")),
   childModules = character(0),
-  version = list(Biomass_regenerationPM = "0.2.1"),
+  version = list(Biomass_regenerationPM = "0.3.0"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   loadOrder = list(after = "Biomass_core"),
