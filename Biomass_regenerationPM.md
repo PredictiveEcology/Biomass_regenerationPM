@@ -1,7 +1,7 @@
 ---
 title: "Biomass_regenerationPM"
 author: "Ceres Barros, Yong Luo, Eliot McIntire"
-date: "08 October 2026"
+date: "05 November 2026"
 output:
   html_document:
     df_print: paged
